@@ -1,0 +1,1963 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>GOGOいもっち！</title>
+<meta name="description" content="横浜から群馬・太田まで、車を踏んでジャンプで進むドット絵の横スクロールゲーム。帰り道は夜明けまでのタイムアタック。">
+<meta property="og:title" content="GOGOいもっち！">
+<meta property="og:description" content="横浜から太田へ！車を踏んで進むドット絵ゲーム。みんなのランキングつき。">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0d1020">
+<style>
+  :root{ --bg:#0d1020; --fg:#f4f4f8; --btn:rgba(255,255,255,.14); --btnOn:rgba(255,255,255,.32); color-scheme:dark; }
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hidden;
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;touch-action:none;-webkit-user-select:none;user-select:none}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  canvas{display:block;image-rendering:pixelated}
+  #snd,#rankBtn,#pauseBtn{position:fixed;top:calc(3px + env(safe-area-inset-top,0px));width:30px;height:26px;padding:0;border-radius:13px;
+    background:var(--btn);border:1px solid rgba(255,255,255,.35);color:#fff;font:bold 15px/24px sans-serif;text-align:center;cursor:pointer;z-index:5;transform-origin:center}
+  #snd{right:calc(4px + env(safe-area-inset-right,0px))}
+  #snd.off{opacity:.45;text-decoration:line-through}
+  #snd:focus-visible{outline:2px solid #ffe14d}
+  #notice{position:fixed;inset:0;background:#000;color:#f4f4f8;display:flex;align-items:center;justify-content:center;z-index:50;transition:opacity .35s}
+  #notice p{margin:0;padding:0 16px;font-size:15px;line-height:1.9;text-align:center;font-weight:bold}
+  #notice.hide{opacity:0;pointer-events:none}
+  body.rotated #notice p{transform:rotate(90deg);width:calc(100vh - 40px);flex:none;box-sizing:border-box}
+  #pauseBtn,#rankBtn{right:calc(38px + env(safe-area-inset-right,0px))}
+  body.rotated #pauseBtn,body.rotated #rankBtn{top:auto;bottom:calc(38px + env(safe-area-inset-bottom,0px));right:calc(3px + env(safe-area-inset-right,0px));transform:rotate(90deg)}
+  #rank{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;
+    background:rgba(13,16,32,.96);border:2px solid #ffd27a;border-radius:12px;padding:12px 14px;z-index:10;touch-action:auto;-webkit-user-select:text;user-select:text;box-sizing:border-box}
+  #rank[hidden]{display:none}
+  .rk-head{display:flex;justify-content:space-between;align-items:center;font-size:16px;color:#ffd27a}
+  .rk-head button{background:none;border:0;color:#fff;font-size:18px;cursor:pointer;padding:2px 6px}
+  .rk-name{display:flex;gap:6px;align-items:center;margin:8px 0;font-size:12px;flex-wrap:wrap}
+  .rk-name input{flex:1;min-width:120px;padding:5px 8px;border-radius:6px;border:1px solid #556;background:#1a1f38;color:#fff;font-size:14px}
+  .rk-name button{padding:5px 12px;border-radius:6px;border:0;background:#1f6fd6;color:#fff;font-weight:bold;cursor:pointer}
+  .rk-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .rk-cols h3{margin:4px 0;font-size:13px;color:#9fd0ff}
+  .rk-cols ol{margin:0;padding-left:22px;font-size:13px;line-height:1.7}
+  .rk-cols li span{float:right;color:#ffe14d;font-variant-numeric:tabular-nums}
+  .rk-cols li.me{color:#7dff8a}
+  #rkStatus{margin:8px 0 0;font-size:11px;color:#cfd3e6}
+  @media (max-width:420px){body:not(.rotated) .rk-cols{grid-template-columns:1fr}}
+  body.rotated #rank{transform:translate(-50%,-50%) rotate(90deg);width:min(560px,calc(100vh - 32px));max-height:calc(100vw - 32px)}
+  /* 縦持ちのスマホでは画面ごと90度回して横画面で表示する */
+  body.rotated #snd{top:auto;bottom:calc(4px + env(safe-area-inset-bottom,0px));right:calc(3px + env(safe-area-inset-right,0px));transform:rotate(90deg)}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+<div id="notice"><p>このゲームはフィクションです。<br>登場する人物などは、実在の人物には一切関係ありません。</p></div>
+<button id="snd" type="button" aria-label="音のON/OFF（M）" title="音のON/OFF（M）">♪</button>
+<button id="pauseBtn" type="button" hidden aria-label="一時停止（P）" title="一時停止（P）">⏸</button>
+<button id="rankBtn" type="button" aria-label="ランキング" title="ランキング">🏆</button>
+<div id="rank" hidden>
+  <div class="rk-head"><b>🏆 みんなのランキング</b><button id="rkClose" type="button" aria-label="閉じる">✕</button></div>
+  <div class="rk-name"><label for="rkName">なまえ</label><input id="rkName" maxlength="12" placeholder="ランキングに出す名前"><button id="rkSave" type="button">保存</button></div>
+  <div class="rk-cols">
+    <div><h3>行き：スコア</h3><ol id="rkScore"></ol></div>
+    <div><h3>帰り道：タイム</h3><ol id="rkTime"></ol></div>
+  </div>
+  <p id="rkStatus"></p>
+</div>
+<script>
+(()=>{
+const W=480,H=270,GROUND=225,BG=1.5; // 背景は旧320x180の座標を1.5倍で描く
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+const isTouch=()=>matchMedia('(pointer:coarse)').matches||('ontouchstart' in window)||navigator.maxTouchPoints>0;
+function resize(){
+  // 縦持ちのスマホでは、キャンバスを90度回して横画面として使う
+  const rot=isTouch()&&innerHeight>innerWidth;
+  document.body.classList.toggle('rotated',rot);
+  const dpr=window.devicePixelRatio||1, vw=rot?innerHeight:innerWidth, vh=rot?innerWidth:innerHeight;
+  const scale=Math.min(vw/W,vh/H);
+  cv.style.transform=rot?'rotate(90deg)':'';
+  cv.style.width=Math.floor(W*scale)+'px'; cv.style.height=Math.floor(H*scale)+'px';
+  cv.width=Math.floor(W*scale*dpr); cv.height=Math.floor(H*scale*dpr);
+  ctx.setTransform(scale*dpr,0,0,scale*dpr,0,0); ctx.imageSmoothingEnabled=false;
+}
+addEventListener('resize',resize); resize();
+
+// ---------- 共通：多角形で描いて → ドット化（色を限定・縁取り） ----------
+const OUTLINE='#15111c';
+function hex2rgb(h){const n=parseInt(h.slice(1),16);return [n>>16,(n>>8)&255,n&255];}
+function shade(hex,amt){
+  let [r,g,b]=hex2rgb(hex);
+  r=Math.max(0,Math.min(255,r+amt));g=Math.max(0,Math.min(255,g+amt));b=Math.max(0,Math.min(255,b+amt));
+  return '#'+((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1);
+}
+function pixelize(c,pal,outline=true){
+  const g=c.getContext('2d'),w=c.width,h=c.height;
+  const id=g.getImageData(0,0,w,h),d=id.data;
+  const P=[...pal].map(hex2rgb);
+  for(let i=0;i<d.length;i+=4){
+    if(d[i+3]<120){d[i+3]=0;continue;}
+    let best=0,bd=1e9;
+    for(let k=0;k<P.length;k++){const dr=d[i]-P[k][0],dg=d[i+1]-P[k][1],db=d[i+2]-P[k][2];const dd=dr*dr+dg*dg+db*db;if(dd<bd){bd=dd;best=k;}}
+    d[i]=P[best][0];d[i+1]=P[best][1];d[i+2]=P[best][2];d[i+3]=255;
+  }
+  if(outline){
+    const src=new Uint8ClampedArray(d);const o=hex2rgb(OUTLINE);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+      const i=(y*w+x)*4;if(src[i+3])continue;
+      const n=(xx,yy)=>xx>=0&&yy>=0&&xx<w&&yy<h&&src[(yy*w+xx)*4+3];
+      if(n(x-1,y)||n(x+1,y)||n(x,y-1)||n(x,y+1)){d[i]=o[0];d[i+1]=o[1];d[i+2]=o[2];d[i+3]=255;}
+    }
+  }
+  g.putImageData(id,0,0);
+}
+const pts=s=>s.trim().split(/\s+/).map(p=>p.split(',').map(Number));
+function path(g,P){g.beginPath();P.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.closePath();}
+
+// ---------- いもっち（写真から：黒髪・メガネ・青ポロ＋黒パネル＋赤ライン・タオル・グレーのズボン・白スニーカー・お腹） ----------
+const CW=46,CH=54,FOOT=50;
+const C={skin:'#c68a5c',skinD:'#a06a44',hair:'#16120f',hairL:'#3a302a',frame:'#1c1c22',lens:'#bcd3de',
+  blue:'#1f44e6',blueD:'#1630a8',blueL:'#4d6dff',black:'#1b1b22',red:'#e2203e',white:'#f4f4f4',
+  towel:'#a39a8e',towelL:'#c9c1b5',pants:'#80858f',pantsD:'#62666f',shoe:'#ececec',shoeD:'#a9a9ad',mouth:'#4a1f19',
+  bottle:'#dcefff',label:'#2a5bd7'};
+function renderChar(pose){
+  const c=document.createElement('canvas');c.width=CW;c.height=CH;const g=c.getContext('2d');
+  const pal=new Set([OUTLINE]);const F=col=>{pal.add(col);g.fillStyle=col;};const S=col=>{pal.add(col);g.strokeStyle=col;};
+  g.lineCap='round';g.lineJoin='round';
+  const hip=[21,31];
+  function leg(ang,bend,pc){
+    const k=[hip[0]+7.5*Math.sin(ang),hip[1]+7.5*Math.cos(ang)];
+    const a2=ang-bend;const a=[k[0]+8*Math.sin(a2),k[1]+8*Math.cos(a2)];
+    S(pc);g.lineWidth=5.5;g.beginPath();g.moveTo(hip[0],hip[1]);g.lineTo(k[0],k[1]);g.lineTo(a[0],a[1]);g.stroke();
+    // スニーカー（白・黒ライン）
+    const sx=Math.round(a[0]),sy=Math.round(a[1]);
+    F(C.shoe);g.beginPath();g.moveTo(sx-3,sy-1);g.lineTo(sx+4,sy-1);g.quadraticCurveTo(sx+8,sy,sx+8,sy+3);g.lineTo(sx-3,sy+3);g.closePath();g.fill();
+    F(C.shoeD);g.fillRect(sx-3,sy+2,11,1);
+    F(C.black);g.fillRect(sx+1,sy,2,1);
+  }
+  function arm(ang,sleeve,skin,bottle){
+    const sh=[21,20];
+    const e=[sh[0]+6*Math.sin(ang),sh[1]+6*Math.cos(ang)];
+    const a2=ang+0.35;const hnd=[e[0]+6*Math.sin(a2),e[1]+6*Math.cos(a2)];
+    const se=[sh[0]+4*Math.sin(ang),sh[1]+4*Math.cos(ang)];
+    S(skin);g.lineWidth=3.6;g.beginPath();g.moveTo(se[0],se[1]);g.lineTo(e[0],e[1]);g.lineTo(hnd[0],hnd[1]);g.stroke();
+    F(skin);g.beginPath();g.arc(hnd[0],hnd[1],2,0,7);g.fill();
+    S(sleeve);g.lineWidth=5.4;g.beginPath();g.moveTo(sh[0],sh[1]);g.lineTo(se[0],se[1]);g.stroke();
+    if(bottle){const bx=Math.round(hnd[0])-1,by=Math.round(hnd[1]);F(C.bottle);g.fillRect(bx,by-1,3,8);F(C.label);g.fillRect(bx,by+1,3,2);F(C.white);g.fillRect(bx+1,by-2,1,1);}
+  }
+  // 奥の腕・奥の脚
+  arm(pose.ba,C.blueD,C.skinD,false);
+  leg(pose.bl,pose.bb,C.pantsD);
+  leg(pose.fl,pose.fb,C.pants);
+  // 腰
+  F(C.pants);path(g,pts('14,31 27,31 27,37 15,37'));g.fill();
+  // ポロシャツ（お腹が前に出る）
+  g.beginPath();g.moveTo(14,18);g.lineTo(25,17.5);g.bezierCurveTo(32.5,19.5,35.5,29,28.5,34.8);g.lineTo(14,34.8);g.bezierCurveTo(11.4,29,11.4,22,14,18);g.closePath();
+  F(C.blue);g.fill();
+  g.save();g.clip();
+  F(C.blueL);g.fillRect(25,21,7,1);              // お腹のハイライト
+  F(C.blueD);g.fillRect(10,18,3,18);g.fillRect(10,33,30,3);
+  F(C.black);g.fillRect(15,23,3,12);              // 脇の黒パネル
+  F(C.red);g.fillRect(18,23,1,12);                // 赤ライン
+  g.restore();
+  F(C.white);g.fillRect(25,21,3,1);F(C.white);g.fillRect(26,20,1,1); // 胸のロゴ
+  F(C.red);g.fillRect(23,17,3,1);                 // 襟の赤
+  // 首のタオル
+  F(C.towel);g.beginPath();g.ellipse(20,17.6,6.6,2.4,0,0,7);g.fill();
+  F(C.towelL);g.fillRect(16,16,7,1);
+  // 頭
+  F(C.skin);g.beginPath();g.arc(21.5,10,6.8,0,7);g.fill();
+  F(C.skin);g.fillRect(24,13,4,3); // あご
+  F(C.skinD);g.fillRect(17,10,2,3);   // 耳
+  // 黒髪（ボサっと）
+  F(C.hair);g.beginPath();g.moveTo(14,12.5);g.lineTo(14,6);g.quadraticCurveTo(20,1.2,28,4);g.lineTo(29,7.5);g.lineTo(25.5,6.5);g.lineTo(22,8);g.lineTo(19,7.2);g.lineTo(17.5,9);g.lineTo(16.5,13);g.closePath();g.fill();
+  F(C.hair);g.fillRect(16,2,2,2);g.fillRect(20,1,2,2);g.fillRect(24,2,2,1);g.fillRect(27,3,2,2);
+  F(C.hairL);g.fillRect(19,3,3,1);
+  // メガネ
+  F(C.frame);g.fillRect(17,9,6,1);g.fillRect(22,9,7,1);g.fillRect(22,12,6,1);g.fillRect(22,9,1,4);g.fillRect(28,9,1,3);
+  F(C.lens);g.fillRect(23,10,5,2);
+  F(C.frame);g.fillRect(25,10,1,2); // 目
+  F(C.skinD);g.fillRect(28,12,1,2); // 鼻
+  F(C.mouth);g.fillRect(25,15,pose.hurt?3:2,pose.hurt?2:1);
+  // 手前の腕（ペットボトル）
+  arm(pose.fa,C.blue,C.skin);
+  pixelize(c,pal);
+  return c;
+}
+const CHAR={run:[]};
+for(let k=0;k<8;k++){
+  const s=Math.sin(k/8*Math.PI*2);
+  CHAR.run.push(renderChar({fl:0.7*s,bl:-0.7*s,fb:s<0?-s*1.3+0.1:0.1,bb:s>0?s*1.3+0.1:0.1,fa:-0.75*s,ba:0.75*s}));
+}
+CHAR.idle=renderChar({fl:0.06,bl:-0.06,fb:0.1,bb:0.1,fa:0.15,ba:-0.15});
+CHAR.jump=renderChar({fl:0.95,bl:-0.45,fb:1.5,bb:0.7,fa:2.2,ba:-0.7});
+CHAR.hurt=renderChar({fl:0.5,bl:-0.6,fb:0.6,bb:0.4,fa:2.7,ba:-2.6,hurt:true});
+
+// さつまいも（回復）
+function renderImo(){
+  // 紡錘形の赤紫の皮・左の切り口は黄色い中身・右はしっぽのひげ根・皮の筋と芽の点
+  // 割った焼き芋：2つに割った半分ずつが、黄金色の中身を向かい合わせにしている（湯気は描画側で）
+  const c=document.createElement('canvas');c.width=32;c.height=17;const g=c.getContext('2d');const pal=new Set([OUTLINE]);
+  const F=col=>{pal.add(col);g.fillStyle=col;};const R=(x,y,w,h)=>g.fillRect(x,y,w,h);
+  const half=(m)=>{ // m=1:左の半分（中身は右向き） m=-1:右の半分。割れ目側を少し持ち上げてハの字に
+    g.save();if(m<0){g.translate(32,0);g.scale(-1,1);}
+    g.translate(1,12);g.rotate(-0.26);g.translate(-1,-12);
+    F('#8a2c58');g.beginPath();g.moveTo(1,10);g.quadraticCurveTo(3,5,11,4.5);g.lineTo(11,14.5);g.quadraticCurveTo(3,14.5,1,11.5);g.closePath();g.fill(); // 焼けた皮
+    F('#5e1d3c');R(3,12.5,8,2);                                               // 下の陰
+    F('#c25a8e');R(4,6,6,1.2);                                                // てかり
+    F('#2e1220');R(6,9,1.2,1.2);R(9,11,1.2,1.2);R(3.5,10.5,1.2,1.2);          // 焦げ
+    F('#f5b52e');g.beginPath();g.ellipse(11,9.5,3,5,0,0,7);g.fill();          // 割れた中身（黄金色）
+    F('#ffd95a');g.beginPath();g.ellipse(11.6,9.2,2,3.8,0,0,7);g.fill();
+    F('#fff0a8');R(11,6.5,1.2,2);R(12.2,10,1.2,1.2);                          // ほくほくの光
+    F('#d98a1c');R(10.5,12.6,1.2,1.2);
+    g.restore();
+  };
+  half(1);half(-1);
+  pixelize(c,pal);return c;
+}
+const IMO=renderImo();
+// 焼きまんじゅう（群馬名物：竹串に4つ・みそだれの焦げ目）
+function renderManju(){
+  const c=document.createElement('canvas');c.width=28;c.height=13;const g=c.getContext('2d');const pal=new Set([OUTLINE]);
+  const F=col=>{pal.add(col);g.fillStyle=col;};
+  F('#d9b77a');g.fillRect(0,6,28,1.6);                                    // 竹串
+  for(let i=0;i<4;i++){const x=4.5+i*6.2;
+    F('#b8682a');g.beginPath();g.arc(x,6.5,3.6,0,7);g.fill();             // まんじゅう（みそだれ）
+    F('#e39a4e');g.fillRect(x-2,3.6,2.5,1.2);                               // てかり
+    F('#6a3214');g.fillRect(x+0.6,7.4,1.6,1.2);g.fillRect(x-2.4,8.6,1.2,1); // 焦げ目
+  }
+  pixelize(c,pal);return c;
+}
+const MANJU=renderManju();
+// メカヘルメット（オリジナルデザイン：緑のまるいヘルメット＋丸窓の一つ目カメラ＋★アンテナ）
+function renderHelmet(eyeOn=true){
+  const c=document.createElement('canvas');c.width=28;c.height=26;const g=c.getContext('2d');const pal=new Set([OUTLINE]);
+  const F=col=>{pal.add(col);g.fillStyle=col;};
+  g.translate(2,4);
+  F('#4f8a3c');g.beginPath();g.ellipse(12,10,9.6,8.8,0,0,7);g.fill();             // ドーム（緑）
+  F('#3a6a2c');g.beginPath();g.moveTo(3,12);g.lineTo(21,12);g.lineTo(19,19);g.lineTo(6,19);g.closePath();g.fill(); // あご
+  F('#7fbf5c');g.fillRect(6,3,7,1);g.fillRect(4,5,2,3);                             // ハイライト
+  F('#f4f4f4');g.fillRect(3,9,8,1.5);                                               // 白ライン
+  F('#1a1a20');g.beginPath();g.arc(16.5,9.5,4.6,0,7);g.fill();                       // 丸窓
+  F('#9aa3ad');g.beginPath();g.arc(16.5,9.5,4.6,0,7);g.lineWidth=1;pal.add('#9aa3ad');g.strokeStyle='#9aa3ad';g.stroke();
+  if(eyeOn){F('#3fe6ff');g.beginPath();g.arc(17.5,9.5,2.2,0,7);g.fill();F('#e8ffff');g.fillRect(17,8,1,1);} // 一つ目（水色）
+  else{F('#2c5a66');g.beginPath();g.arc(17.5,9.5,2.2,0,7);g.fill();}
+  F('#16161c');g.fillRect(4,13,5,4);F('#8a96a0');g.fillRect(5,14,3,1);g.fillRect(5,16,3,1); // ほほの排気口
+  F('#2a2a32');g.fillRect(5,19,14,2);                                                // 首のリング
+  pixelize(c,pal);return c;
+}
+const HELMET=renderHelmet(true), HELMET_OFF=renderHelmet(false);
+const MECHA_TIME=600; // 10秒（60fps）
+// 編集長（オリジナルキャラ）：白髪オールバック・太いひげ・紺のスーツ・赤ネクタイ・腕組み。左向き
+function renderEditor(){
+  const c=document.createElement('canvas');c.width=44;c.height=60;const g=c.getContext('2d');const pal=new Set([OUTLINE]);
+  const F=col=>{pal.add(col);g.fillStyle=col;};
+  // 脚と靴
+  F('#3a3d48');g.fillRect(15,40,6,15);g.fillRect(23,40,6,15);
+  F('#1a1a1e');g.fillRect(11,54,10,4);g.fillRect(21,54,10,4);
+  // 胴体（紺のスーツ）
+  F('#23305a');g.beginPath();g.moveTo(12,19);g.lineTo(32,19);g.lineTo(33,42);g.lineTo(11,42);g.closePath();g.fill();
+  F('#f4f4f4');path(g,pts('19,19 25,19 22,27'));g.fill();                       // シャツ
+  F('#d8202c');path(g,pts('21,20 23,20 23.5,30 22,32 20.5,30'));g.fill();       // ネクタイ
+  F('#1a2446');g.fillRect(11,40,22,2);
+  // 腕組み
+  F('#2b3a6c');g.beginPath();g.ellipse(22,31,11.5,3.6,0,0,7);g.fill();
+  F('#d9a77e');g.fillRect(10,29,4,4);g.fillRect(30,29,4,4);
+  // 頭
+  F('#d9a77e');g.beginPath();g.arc(21,11,7.2,0,7);g.fill();
+  F('#b9825a');g.fillRect(26,10,2,3);                                            // 耳（後ろ側＝右）
+  F('#e6e6ea');g.beginPath();g.moveTo(13,9);g.quadraticCurveTo(18,1.5,28,4.5);g.lineTo(29,10);g.lineTo(26,7);g.lineTo(18,6.5);g.lineTo(14,10.5);g.closePath();g.fill(); // 白髪オールバック
+  F('#b8b8c0');g.fillRect(18,4,8,1);
+  F('#2a2020');g.fillRect(14,9,4,1);                                             // まゆ（きりっと）
+  F('#1a1414');g.fillRect(15,11,2,1);                                            // 目
+  F('#b9825a');g.fillRect(13,12,1,2);                                            // 鼻
+  F('#3a2a24');g.fillRect(13,14,7,2);                                            // 太いひげ
+  F('#2a1a18');g.fillRect(15,17,3,1);                                            // 口
+  pixelize(c,pal);return c;
+}
+const EDITOR=renderEditor();
+// マリオ高野さん（写真から・作り込み版）：2倍の解像度で描いて半分の大きさで表示（44x62）。左向き
+// 黒い編み目の中折れハット＋青紺のバンド・日焼けした顔の笑いじわ・白髪まじりのひげ・歯を見せた満面の笑み・
+// 青いTシャツ（胸に白いロゴと手書き風の文字）＋下に紺のパーカー（青い襟）・右手の人さし指を立てる・
+// 左わきにイベントのポスター・黒いズボン・グレーのスニーカー
+function renderMario(){
+  const c=document.createElement('canvas');c.width=88;c.height=124;const g=c.getContext('2d');const pal=new Set([OUTLINE]);
+  g.scale(2,2);
+  const F=col=>{pal.add(col);g.fillStyle=col;};const R=(x,y,w,h)=>g.fillRect(x,y,w,h);
+  const P=(pts)=>{g.beginPath();pts.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.closePath();g.fill();};
+  // ---- 脚と靴 ----
+  F('#1e1e26');R(15,43,6,13);R(23,43,6,13);
+  F('#30303a');R(17,44,1,11);R(25,44,1,11);                                  // ズボンの折り目の光
+  F('#15151b');R(20,44,1,12);R(28,44,1,12);R(15,49,6,0.5);R(23,50,6,0.5);    // 陰としわ
+  F('#5a5c66');P([[10.5,59],[11,55.5],[21,55],[21,59]]);P([[20.5,59],[21,55.5],[31,55],[31,59]]); // スニーカー
+  F('#7a7c86');R(12,55.5,7,1);R(22,55.5,7,1);
+  F('#ececf0');R(10.5,58,10.5,1.5);R(20.5,58,10.5,1.5);                       // 白い靴底
+  F('#d0d0d6');R(13,56.5,0.5,0.5);R(15,56.5,0.5,0.5);R(23,56.5,0.5,0.5);R(25,56.5,0.5,0.5);
+  // ---- フードと青い襟（首まわり） ----
+  F('#1c2442');g.beginPath();g.ellipse(23,21,9.5,3.6,0,0,7);g.fill();
+  F('#2f7fd8');P([[19,19.5],[22.5,22.5],[26,19.5],[25,21.8],[22.5,23.3],[20,21.8]]);
+  // ---- Tシャツ（青） ----
+  F('#1f6fd6');P([[11.5,21.5],[33.5,21.5],[34.5,45],[10.5,45]]);
+  F('#2a7fe8');R(13,22,9,1);R(12.5,23,3,2);                                   // 肩の光
+  F('#1858b0');P([[29,22],[33.5,21.5],[34.5,45],[30,45]]);                    // 右の陰
+  F('#1650a0');R(10.5,43.2,24,1.8);                                           // すその陰
+  F('#1a5cbc');R(14,37,7,0.6);R(16,40,9,0.6);R(26,27,3,0.6);                  // 布のしわ
+  F('#2a2a3a');R(23,24,1.5,1.5);R(27,35,1.2,1.2);R(13,33,1,1);                // 雨のしみ
+  // 胸のロゴ（丸いマーク）と手書き風の文字
+  F('#f2f6ff');g.beginPath();g.arc(15.5,29.5,2.4,0,7);g.fill();
+  F('#1f6fd6');g.beginPath();g.arc(15.5,29.5,1.5,0,7);g.fill();
+  F('#f2f6ff');R(15.2,28.4,0.6,0.6);R(14.4,29.8,0.6,0.6);R(16.3,30.2,0.6,0.6);
+  F('#f2f6ff');g.save();g.translate(18.5,28.6);g.rotate(-0.12);
+  g.font='bold 3.4px sans-serif';g.textBaseline='middle';g.fillText('NO SUBARU',0,0);g.fillText('NO LIFE!!',1.5,3.4);g.restore();
+  // ---- ポスター（左わきに抱える）：白い縁・青い枠・紺の地に赤い帯と白い文字 ----
+  F('#f4f4f6');P([[24,33],[37,32],[37.5,47],[24.5,48]]);
+  F('#1f4fc4');P([[25,34],[36.2,33.2],[36.6,46.2],[25.4,47]]);
+  F('#16244e');P([[26,35],[35.4,34.3],[35.7,45.3],[26.3,46]]);
+  F('#d8202c');P([[26,36.5],[35.5,35.8],[35.5,37.2],[26,37.9]]);
+  F('#f4f4f6');R(27,39,7,0.7);R(27,40.6,6,0.7);R(27,42.2,7.5,0.7);R(27.5,44,4,0.6);
+  F('#3f8ef0');R(30.5,43.6,4,1.4);
+  // ---- 下ろした腕（奥側）：紺の袖でポスターを押さえる ----
+  F('#1c2442');P([[30.5,22.5],[34.5,23.5],[35.5,36],[31.5,37]]);
+  F('#2a3458');R(31.5,35,4,1.6);                                              // 袖口のリブ
+  F('#b07a52');P([[31,36.5],[35.5,35.8],[35.2,39],[31.5,39.3]]);              // 手
+  F('#94603e');R(31.6,38.2,3.4,0.5);
+  // ---- 上げた腕（手前）：紺の袖→リブの袖口→こぶし→人さし指を立てる ----
+  F('#1c2442');P([[11,22.5],[15.5,25],[10.8,14.5],[6.2,14.5]]);
+  F('#252e52');R(11.5,18,2,0.6);R(12.5,21,2,0.6);                             // 袖のしわ
+  F('#2a3458');P([[6,14.2],[11,14.2],[11.2,16],[6.4,16]]);                    // 袖口のリブ
+  F('#b07a52');P([[5,9.5],[10.2,9.5],[10.6,14.4],[5.4,14.4]]);                // こぶし
+  F('#b07a52');R(6.2,3.2,2.2,6.8);                                            // 立てた人さし指
+  F('#c99572');R(6.4,3.4,1.2,1);                                              // 爪
+  F('#94603e');R(6,11,4,0.5);R(6,12.6,4,0.5);R(9.8,10,0.6,4);R(8.4,5.6,0.5,0.6);// 指の関節と陰
+  F('#a06a46');R(9.6,10.4,1.6,2.2);                                           // 親指
+  // ---- 首と頭（日焼け） ----
+  F('#9a6644');R(19.5,18.5,6,3);
+  F('#b07a52');g.beginPath();g.ellipse(22,13.8,7.2,7.8,0,0,7);g.fill();
+  F('#9a6644');g.beginPath();g.ellipse(25.5,14.5,3.4,6.6,0,0,7);g.fill();     // 奥側の陰
+  F('#b07a52');g.beginPath();g.ellipse(21.4,13.8,6.2,7.4,0,0,7);g.fill();
+  F('#94603e');P([[27,11],[29.4,11.4],[29.2,15.4],[27.2,15.6]]);              // 耳
+  F('#7e4e32');R(27.8,12.4,0.8,2);
+  F('#8f8a84');R(25.8,9.6,1.6,3.4);                                           // 白髪まじりのもみあげ
+  F('#c48c62');R(15.6,12.6,2.4,1.2);R(20,9.6,3,0.8);                          // 頬と額の光
+  // 顔（左向き）
+  F('#6e6a66');R(14.4,9.9,3.2,0.8);                                           // まゆ
+  F('#2a1a14');P([[14.8,11.6],[17.2,11.2],[17.2,12],[14.8,12.3]]);            // 細めた目
+  F('#7e4e32');R(17.8,10.8,1.2,0.5);R(17.9,12.2,1.3,0.5);R(18.2,11.5,1,0.5);  // 目じりのしわ
+  F('#7e4e32');R(15,13,2,0.5);                                                // 目の下のしわ
+  F('#b07a52');P([[14.5,11],[12.2,14.2],[14.4,14.8]]);                        // 鼻（前に出る）
+  F('#94603e');R(12.6,14,1.6,0.7);
+  F('#7e4e32');g.lineWidth=0.6;g.strokeStyle='#7e4e32';pal.add('#7e4e32');
+  g.beginPath();g.moveTo(15,14.4);g.quadraticCurveTo(18.6,15.2,18.8,18.4);g.stroke();   // ほうれい線（笑いじわ）
+  g.beginPath();g.moveTo(19.6,15.2);g.quadraticCurveTo(21,17.4,20.4,19.4);g.stroke();   // 頬のしわ
+  // ひげ（白髪まじり）
+  F('#a8a29a');P([[12.6,15],[18.4,15],[18.6,15.9],[12.9,15.9]]);
+  F('#8a847c');R(13.4,15.2,0.6,0.5);R(15,15.3,0.6,0.5);R(16.8,15.2,0.6,0.5);
+  // 口：歯を見せた満面の笑み
+  F('#3a1a14');P([[12.9,15.9],[18.6,15.9],[18,18.3],[15.2,18.9],[13.4,18]]);
+  F('#f4efe0');P([[13.2,16],[18.3,16],[18.1,17.2],[13.5,17.2]]);
+  F('#cfc6b0');R(14.4,16,0.4,1.2);R(15.8,16,0.4,1.2);R(17.1,16,0.4,1.2);
+  F('#c47a6a');R(14.6,18,2.4,0.6);                                            // 舌
+  F('#9a948c');R(14,19.6,0.5,0.5);R(15.6,20,0.5,0.5);R(17.2,19.7,0.5,0.5);R(18.6,19.2,0.5,0.5); // あごの無精ひげ
+  // ---- 黒い中折れハット（編み目・中央のくぼみ・青紺のバンド） ----
+  F('#1c1c22');g.beginPath();g.ellipse(22,8.2,11.2,2.5,-0.04,0,7);g.fill();   // つば
+  F('#34343e');g.beginPath();g.ellipse(21.2,9.3,10,1.2,-0.04,0,Math.PI);g.fill(); // つばの前の縁の光
+  F('#26262e');P([[15.2,8],[15.8,1.8],[19,0.8],[22,1.8],[25,0.8],[28.2,1.8],[28.8,8]]);
+  F('#1a1a20');P([[20,1.2],[22,2.6],[24,1.2],[22,4]]);                        // てっぺんのくぼみ
+  F('#30303a');for(let y=2.5;y<7.5;y+=1.1)R(16,y,12.4,0.4);                   // 編み目
+  F('#4f6290');R(15.4,5,13.2,2.3);                                            // バンド
+  F('#6d80ad');R(15.4,5,13.2,0.6);
+  F('#3e4e75');R(26.6,5,1.6,2.3);R(27.6,6.8,1.4,1.4);                         // 横の結び目
+  pixelize(c,pal);return c;
+}
+const MARIO=renderMario();
+
+// ペットボトル（水分回復）
+function renderBottle(){
+  const c=document.createElement('canvas');c.width=12;c.height=22;const g=c.getContext('2d');const pal=new Set([OUTLINE]);
+  const F=col=>{pal.add(col);g.fillStyle=col;};
+  F('#cfe9ff');path(g,pts('2,7 4,4 4,2 8,2 8,4 10,7 10,20 2,20'));g.fill();
+  F('#9fd0ff');g.fillRect(3,13,6,6);
+  F('#2a5bd7');g.fillRect(2,9,8,4);F('#ffffff');g.fillRect(4,10,4,1);
+  F('#1f44e6');g.fillRect(4,0,4,3);
+  F('#ffffff');g.fillRect(3,8,1,4);
+  pixelize(c,pal);return c;
+}
+const BOTTLE=renderBottle();
+const WATER_MAX=125, WATER_JUMP=25, WATER_GET=125; // 水分ゲージ5目盛り・ペットボトル1本で満タン
+
+// ---------- 車のドットモデル（前が左） ----------
+// 実車の横からの写真（Wikimedia Commons）をトレースして、パースを補正したもの。サンバーだけは寸法から
+const SUBARU_MODELS=[
+ {"id": "sti", "name": "WRX STI", "color": "#1f4fc4", "rim": "gold", "w": 115, "h": 37, "wheels": [[24, 8.3], [90, 8.3]], "shoulder": 16.9, "rocker": 28.6, "body": "1.4,32.0 0.5,24.5 1.4,21.1 3.5,18.7 12.4,16.5 22.5,15.1 33.9,11.9 44.4,6.1 56.1,1.5 67.1,0.1 76.8,0.0 82.3,0.5 88.7,4.3 96.4,7.5 105.2,9.2 111.8,9.9 113.6,11.4 115.0,17.0 115.0,27.6 112.7,31.1 87.7,32.8 33.6,32.6", "glass": "34.6,12.0 49.2,5.3 63.0,2.6 78.2,3.3 88.6,6.4 90.0,10.2 42.3,14.3", "parts": [["r", [68.5, 2.6, 1.4, 12.4], "#1a1a22"], ["p", "105.5,12.4 113.2,11.4 113.6,13.6 113.2,16.3 105.5,14.5", "#d8202c"], ["p", "1.3,23.9 1.7,20.4 7.4,20.0 6.2,22.5", "#e8f4ff"], ["p", "0.8,29.6 0.5,26.8 5.0,27.3 5.4,30.2", "#18181e"], ["p", "15.9,16.1 28.1,14.3 28.1,13.3 18.5,15.0", "#24242c"], ["p", "94.8,2.3 116.9,2.5 116.6,3.9 95.3,4.4", "body"], ["p", "116.9,2.3 114.8,2.3 115.1,8.0 116.9,7.5", "body"], ["p", "104.4,9.3 104.9,3.9 106.5,3.9 106.2,9.3", "body"], ["p", "40.0,12.1 42.2,10.9 44.7,12.1 43.9,14.4 40.6,14.0", "body"], ["r", [40.9, 15.6, 2.5, 1], "bodyD"], ["r", [75.4, 13.1, 3.0, 1], "bodyD"], ["r", [34.2, 12.0, 1, 19.5], "bodyD"], ["r", [63.6, 11.1, 1, 21.7], "bodyD"], ["r", [89.6, 10.4, 1, 19.6], "bodyD"], ["r", [33.1, 23.6, 3.0, 1], "#c8ccd4"], ["r", [33.6, 31.5, 51.2, 1.1], "#202028"], ["r", [102.6, 30.0, 11.0, 1.4], "#18181e"]], "flare": true},
+ {"id": "levorg", "name": "LEVORG", "color": "#2b4fa8", "rim": "silver", "w": 119, "h": 38, "wheels": [[24, 8.3], [91, 8.3]], "shoulder": 18, "rocker": 27.7, "body": "3.2,33.1 0.0,27.9 1.1,22.9 6.9,17.3 23.1,13.1 32.5,11.0 40.5,6.0 47.3,2.3 63.2,0.0 85.9,0.0 105.6,1.0 110.5,2.3 113.8,5.6 116.7,10.6 119.0,15.5 118.7,22.5 115.5,30.2 74.5,32.7 33.7,33.4", "glass": "34.8,11.8 47.3,3.9 65.4,2.2 88.2,2.9 102.1,4.7 103.5,7.5 92.8,9.5 40.5,14.0", "parts": [["r", [62.0, 2.3, 2.3, 9.6], "#1a1a22"], ["r", [87.6, 2.9, 2.3, 7.0], "#1a1a22"], ["p", "119.0,13.0 112.6,13.7 112.6,16.3 118.7,15.7", "#d8202c"], ["p", "0.5,22.2 2.3,18.5 8.7,18.7 6.0,21.4", "#e8f4ff"], ["p", "3.2,33.1 0.0,29.2 6.9,29.4 8.7,32.8", "#18181e"], ["p", "45.0,12.4 38.2,11.4 38.0,16.2 44.4,16.6", "#1a1a22"], ["r", [32.3, 11.6, 1, 22.0], "bodyD"], ["r", [62.4, 12.5, 1, 21.0], "bodyD"], ["r", [91.9, 9.9, 1, 20.3], "bodyD"], ["r", [82.5, 14.3, 3.4, 1], "bodyD"], ["r", [55.2, 16.9, 3.4, 1], "bodyD"], ["r", [33.7, 31.0, 43.2, 1], "#c0c4cc"], ["p", "119.0,19.7 107.9,21.8 109.1,23.2 118.7,22.7", "#18181e"], ["p", "97.7,0.1 95.7,-1.4 92.5,0.1", "#1a1a22"]]},
+ {"id": "brz", "name": "BRZ", "color": "#2557d8", "rim": "dark", "w": 102, "h": 33, "wheels": [[22.1, 7.9], [86.5, 7.9]], "shoulder": 15.4, "rocker": 23.5, "body": "2.0,27.7 0.0,25.1 0.0,21.2 0.6,18.9 1.2,17.7 3.7,15.5 6.5,13.4 13.8,11.1 25.2,9.4 33.3,10.0 40.6,6.4 49.5,1.6 57.7,0.2 65.8,0.2 73.9,2.0 82.0,4.9 90.2,7.0 98.7,6.9 99.1,8.7 100.9,11.2 102.0,14.2 102.0,24.1 100.9,26.6 100.0,27.4 90.2,28.5 41.4,28.3", "glass": "44.3,10.9 48.7,2.8 57.7,2.0 69.0,3.1 78.8,6.6 73.9,9.4", "parts": [["r", [68.7, 3.1, 1, 6.5], "#1a1a22"], ["p", "31.3,17.6 33.3,17.6 36.6,25.7 34.5,25.6", "#18181e"], ["p", "1.1,17.9 4.9,15.1 13.8,14.2 13.5,15.5 5.0,16.7 1.5,18.9", "#e8f4ff"], ["p", "0.2,19.8 6.1,19.9 8.9,24.5 8.5,27.2 2.0,27.1", "#18181e"], ["p", "92.6,10.1 99.1,9.1 100.8,11.2 93.8,12.1", "#d8202c"], ["p", "46.3,12.3 45.7,8.5 48.7,7.3 52.0,7.9 51.6,10.2 48.7,12.4", "body"], ["r", [37.8, 11.2, 1, 15.4], "bodyD"], ["r", [71.3, 9.7, 1, 17.7], "bodyD"], ["r", [64.2, 14.5, 4.9, 1], "bodyD"], ["r", [36.6, 26.9, 41.4, 1.2], "#202028"], ["r", [90.2, 27.3, 10.6, 1.2], "#18181e"]]},
+ {"id": "forester", "name": "FORESTER", "color": "#4f73a0", "rim": "silver", "w": 116, "h": 43, "wheels": [[23, 9.3], [90, 9.3]], "shoulder": 19, "rocker": 30, "body": "1,37 0,30 0.5,24 2,20.5 8,19 24,17.2 38,15.5 53,2.4 60,2 88.1,2.2 98.9,2.4 103.4,4.5 109.3,10.5 114.5,13.9 116,20.3 116,29.3 112.3,33.7 107.1,36.6 60,37.2", "glass": "41,15.2 53.5,3.8 62,3.2 81.6,4 95.9,5.2 100.4,8.9 98.9,14.8", "parts": [["r", [57, -1.8, 36, 1.8], "#a8aeb8"], ["r", [59, -0.4, 2, 1], "#a8aeb8"], ["r", [90, -0.4, 2, 1], "#a8aeb8"], ["r", [64, 3.6, 2, 11.5], "#1a1a22"], ["r", [80.5, 4, 2, 11], "#1a1a22"], ["p", "114.5,13.1 106.3,13.4 106.3,16 114.1,16.1", "#d8202c"], ["p", "1.5,22.5 3,20.8 15,19.4 14,21.8", "#e8f4ff"], ["p", "0,23 5,22.5 5,28 0,28", "#18181e"], ["r", [0, 25, 5, 1], "#b8bec8"], ["r", [40, 15.6, 1, 18], "bodyD"], ["r", [64.7, 15.6, 1, 19], "bodyD"], ["r", [81.6, 15.3, 1, 18], "bodyD"], ["r", [81.6, 16.8, 4, 1], "bodyD"], ["r", [58.4, 18.4, 4, 1], "bodyD"], ["p", "44,15.4 49,13 50.5,15.4", "body"], ["r", [0, 25.5, 2, 2], "#d0d4dc"]], "cladding": 33},
+ {"id": "22b", "name": "22B STi", "color": "#1f4fc4", "rim": "gold", "w": 109, "h": 35, "wheels": [[22, 8.2], [85, 8.2]], "shoulder": 14.5, "rocker": 26.1, "body": "1.4,31.2 0.0,25.0 0.7,21.4 3.5,18.6 6.3,15.8 27.8,11.2 38.9,8.7 44.9,5.4 50.1,2.2 57.8,0.0 73.2,0.2 80.9,1.6 88.3,5.4 93.7,8.7 94.8,10.0 106.3,10.8 107.9,13.2 108.7,18.3 109.0,19.5 107.9,25.3 105.5,28.1 77.5,30.0 32.1,30.7", "glass": "40.7,9.5 50.1,3.0 57.8,1.4 79.2,2.1 85.4,9.3 85.1,12.2 42.4,12.8", "parts": [["r", [65.9, 1.3, 1.3, 11.2], "body"], ["p", "95.8,15.9 103.4,15.1 103.4,19.3 96.4,19.6", "#d8202c"], ["p", "0.4,20.1 3.5,17.5 11.9,17.2 10.5,20.5 1.4,21.4", "#e8f4ff"], ["p", "0.4,25.9 4.9,25.6 4.9,28.3 0.7,28.6", "#ffe08a"], ["p", "14.7,12.7 27.8,10.8 27.8,9.9 20.3,11.0", "#24242c"], ["p", "94.2,9.0 107.4,4.0 107.6,5.3 94.8,9.8", "body"], ["p", "100.1,9.2 100.8,6.1 101.5,5.9 101.1,9.2", "body"], ["p", "104.4,10.3 105.0,4.7 105.8,4.5 105.5,10.4", "body"], ["p", "38.9,11.3 39.8,9.2 41.7,9.1 41.7,11.6", "body"], ["r", [33.4, 13.2, 1, 17.1], "bodyD"], ["r", [65.1, 12.5, 1, 17.1], "bodyD"], ["r", [58.6, 16.4, 3.4, 1], "bodyD"], ["r", [29.1, 16.9, 1.3, 1], "#f0a020"], ["r", [34.7, 30.6, 41.1, 2.1], "#202028"]], "flare": true},
+ // ---追加車種---
+ {"id": "s360", "name": "SUBARU 360", "color": "#efe6cf", "rim": "steel", "w": 71, "h": 35, "wheels": [[12, 6], [57, 6]], "shoulder": 18.3, "rocker": 26.2, "body": "5.1,28.0 0.2,27.2 0.0,25.5 0.8,22.3 2.8,19.1 5.9,16.3 11.4,13.9 20.1,12.7 23.3,6.4 25.2,2.0 27.2,1.2 41.4,0.0 50.9,0.2 55.6,3.2 61.9,9.5 67.4,18.3 69.7,23.9 70.5,25.9 70.1,27.0 67.4,28.0", "glass": "42.6,4.9 26.0,4.5 24.8,12.7 42.2,12.7", "parts": [["p", "55.6,10.3 53.8,6.0 50.9,4.9 43.8,4.9 43.4,12.3 55.4,12.3", "#22304a"], ["p", "63.4,9.7 56.4,9.2 56.2,15.1 63.6,15.5", "#3a3630"], ["r", [56.2, 11.0, 7.2, 1], "body"], ["r", [56.2, 12.7, 7.2, 1], "body"], ["p", "64.6,11.9 62.7,11.8 62.7,14.3 64.6,14.3", "#d8202c"], ["r", [3.9, 21.2, 1.1, 1], "#f0a020"], ["p", "1.6,24.7 -0.2,24.8 -0.2,27.4 1.6,27.4", "#c8ccd4"], ["p", "70.7,23.9 67.4,23.9 67.4,27.0 70.3,27.0", "#c8ccd4"], ["r", [41.2, 4.9, 1, 22.9], "bodyD"], ["r", [16.4, 13.1, 1, 14.7], "bodyD"], ["r", [23.3, 14.2, 3.9, 1], "#c8ccd4"], ["r", [16.2, 8.4, 1.2, 2.0], "#c8ccd4"]]},
+ {"id": "xv", "name": "XV", "color": "#e8792b", "rim": "silver", "w": 111, "h": 40, "wheels": [[23, 8.5], [90, 8.5]], "shoulder": 16.9, "rocker": 27.4, "cladding": 30.4, "body": "1.9,32.3 0.0,24.7 0.9,20.9 5.6,18.9 16.8,15.0 26.4,12.9 33.9,11.0 41.4,6.0 48.9,3.0 61.4,1.5 94.3,1.9 97.0,3.4 101.0,5.6 105.0,8.8 108.3,12.7 111.0,19.2 110.3,28.0 106.3,32.6 64.0,32.1", "glass": "35.1,14.6 43.9,7.8 51.4,4.8 58.9,4.5 85.2,4.5 95.6,5.3 97.0,8.4 95.6,11.7 61.4,13.5", "parts": [["p", "91.6,0.6 58.9,0.0 58.9,0.8 91.6,1.3", "#1a1a22"], ["r", [60.2, 4.4, 1.9, 9.2], "#1a1a22"], ["r", [85.2, 4.6, 2.5, 7.9], "#1a1a22"], ["p", "108.3,11.8 100.3,12.2 100.3,16.1 108.1,16.2", "#d8202c"], ["p", "0.0,23.4 1.9,20.9 9.3,20.1 6.5,23.0", "#e8f4ff"], ["p", "0.0,27.2 1.9,32.3 7.5,32.1 6.5,27.7", "#18181e"], ["p", "42.0,14.5 37.7,13.9 37.4,17.6 41.7,17.7", "#1a1a22"], ["r", [32.4, 14.7, 1, 17.7], "bodyD"], ["r", [59.9, 13.7, 1, 18.0], "bodyD"], ["r", [87.5, 12.8, 1, 16.1], "bodyD"], ["r", [79.6, 16.2, 4.4, 1], "bodyD"], ["r", [53.3, 18.0, 5.6, 1], "bodyD"]]},
+ {"id": "outback", "name": "OUTBACK", "color": "#eef0f2", "rim": "silver", "w": 116, "h": 40, "wheels": [[20.3, 8.6], [88.9, 8.6]], "shoulder": 18.0, "rocker": 27.1, "cladding": 29.7, "body": "5.5,30.6 1.0,29.5 0.1,26.4 0.6,22.5 2.5,20.1 5.5,18.5 11.6,15.8 20.7,13.4 32.0,11.4 39.6,6.7 45.6,2.5 52.4,0.6 96.3,0.2 101.2,0.4 107.6,6.5 111.4,10.1 114.4,16.0 115.2,19.6 115.2,27.0 114.4,28.8 88.7,30.3 32.0,31.3", "glass": "40.0,13.6 40.3,8.2 46.4,2.9 61.5,2.0 96.3,2.2 100.1,5.0 101.4,9.3 61.5,12.3", "parts": [["p", "100.8,-0.3 46.4,1.5 46.4,2.1 100.8,0.3", "#a8aeb8"], ["r", [60.4, 2.0, 1.9, 10.6], "#1a1a22"], ["r", [81.6, 2.1, 1.1, 8.6], "#1a1a22"], ["p", "112.6,11.2 103.1,12.4 103.1,13.9 112.2,16.4", "#d8202c"], ["p", "0.4,22.1 4.0,19.3 7.8,18.5 6.3,21.6", "#e8f4ff"], ["r", [58.3, 12.7, 1, 17.4], "bodyD"], ["r", [31.1, 13.7, 1, 16.9], "bodyD"], ["r", [85.6, 10.3, 1, 13.4], "bodyD"], ["r", [77.0, 15.2, 6.4, 1], "bodyD"], ["r", [51.3, 16.6, 6.1, 1], "bodyD"], ["p", "40.3,10.2 35.0,10.0 34.7,13.6 40.0,14.0", "body"]]},
+ {"id": "legacy", "name": "LEGACY", "color": "#2a3a5c", "rim": "silver", "w": 117, "h": 37, "wheels": [[26.9, 8.2], [95.6, 8.2]], "shoulder": 16.4, "rocker": 27.8, "body": "2.3,32.4 0.4,29.4 0.0,23.3 0.8,21.0 2.3,18.3 9.2,15.6 20.8,13.0 32.3,11.8 37.6,12.4 45.3,7.2 53.0,2.1 56.1,0.8 66.8,0.2 89.8,0.4 102.1,1.1 104.8,2.7 106.0,5.7 108.3,8.8 112.9,11.8 115.2,14.9 116.4,17.9 116.4,29.4 114.5,30.9 97.5,32.4 36.1,32.8", "glass": "40.7,13.7 46.9,8.0 53.0,3.1 68.4,2.3 88.3,2.5 97.5,2.8 106.0,9.5 105.2,10.5 92.9,12.2", "parts": [["r", [67.6, 2.3, 1.5, 11.1], "#1a1a22"], ["r", [88.3, 2.5, 1.5, 10.1], "#1a1a22"], ["p", "107.5,13.0 112.9,11.4 114.9,14.1 114.5,16.4 108.3,14.5", "#d8202c"], ["p", "1.2,20.2 3.1,18.3 15.4,17.8 14.6,20.2 3.8,22.5", "#e8f4ff"], ["p", "0.0,26.7 13.1,26.7 13.4,30.9 0.8,30.9", "#18181e"], ["r", [39.6, 13.7, 1, 17.9], "bodyD"], ["r", [68.0, 13.4, 1, 17.9], "bodyD"], ["r", [93.3, 12.6, 1, 9.9], "bodyD"], ["r", [60.7, 16.6, 6.1, 1], "bodyD"], ["r", [85.2, 15.3, 5.8, 1], "bodyD"], ["p", "43.4,15.3 43.8,10.7 46.9,9.9 48.4,10.7 48.0,13.7 45.3,15.3", "body"], ["r", [36.1, 30.9, 49.9, 1.5], "#202028"]]},
+ // ---追加車種ここまで---
+ // サンバートラック（キャブオーバー）全長3395 全高1885
+ {id:'sambar',name:'SAMBAR',color:'#eeeeee',rim:'steel',w:85,h:47,wheels:[[15,6.8],[66,6.8]],shoulder:25,rocker:37,
+  body:'2,42 0,36 0,15 1,9 4,3.5 9,2 30,2 31.5,4 31.5,28 85,28 85,41 83,42',
+  glass:'4,5.5 28,5.5 28,17 1.5,17 2,10',
+  parts:[['r',[32,6,2,22],'#2a2a30'],['r',[34,9,4,1],'#2a2a30'],['r',[34,14,4,1],'#2a2a30'],['r',[34,19,4,1],'#2a2a30'],['r',[37,9,1,19],'#2a2a30'],
+   ['r',[4,5,1,33],'bodyD'],['r',[28,5,1,33],'bodyD'],['r',[21,21,3,1],'bodyD'],['r',[31.5,31,53.5,1],'bodyD'],['r',[31.5,36,53.5,1],'bodyD'],
+   ['r',[50,28,1,13],'bodyD'],['r',[68,28,1,13],'bodyD'],['r',[0,36,4,5],'#18181e'],['r',[0,20,2,4],'#e8f4ff'],['r',[0,25,2,2],'#f0a020'],
+   ['r',[83,31,2,4],'#d8202c'],['r',[-1,9,2,3],'#18181e']]},
+];
+const OTHER_MODELS=[ // 特定のメーカーに見えない一般的な車。実車のプロポーション（1m=25px）で
+ {id:'sedan',w:112,h:36,wheels:[[22,8.3],[90,8.3]],shoulder:17,rocker:28,caliper:'#55585f',
+  body:'2,32.5 0.3,27 0.4,22 1.8,19.2 7,17.6 20,16.2 34,15 44,14 51,10 58,5.4 64,3.4 72,2.8 82,3.1 89,4.8 95,9.5 100,12.8 107,13.3 110.5,14.6 111.8,17.5 112,25 110.8,31.5 104,32.5',
+  glass:'47,14 52,10.2 58.6,6.3 64.4,4.5 72,4 81.4,4.3 87.8,5.9 95,12.6',
+  parts:[['r',[71,4.2,2,9.6],'#1a1a22'],['p','1.2,21.6 2.4,19.6 12.5,18.6 11.5,20.8','#e8f4ff'],['p','0.4,25.5 7,25.5 7.5,29.5 1,29.5','#18181e'],
+   ['p','106,14 111,15 111.5,19 106,18.2','#d8202c'],['r',[47,15,0.6,15],'bodyD'],['r',[72.5,14,0.6,16],'bodyD'],['p','89,12.6 89.6,12.6 88.5,28 87.9,28','bodyD'],
+   ['r',[63,17,3.5,0.9],'bodyD'],['r',[84,16.3,3.5,0.9],'bodyD'],['p','49,14 53.5,11.6 55.5,14','body'],['r',[30,30.6,52,1.6],'#24242c']]},
+ {id:'minivan',w:118,h:49,wheels:[[23,8.6],[95,8.6]],shoulder:24,rocker:39,caliper:'#55585f',
+  body:'2,45 0.3,38 0.5,30 2.6,26 9,23.5 21,21.8 27,13 33,5.2 39,2.6 70,1.8 108,2 114,3.4 116.6,7.5 117.6,20 117.6,40 116,44.6 110,45',
+  glass:'25,21.5 30,13.5 34.5,7 39.5,4.6 108,4.4 113,5.8 114.8,9 115,19.5 25,21.5',
+  parts:[['r',[46,4.5,2.5,17],'#1a1a22'],['r',[74,4.4,2.5,17],'#1a1a22'],['r',[101,4.4,3,15.5],'body'],['r',[48,24.5,52,0.8],'bodyD'],
+   ['r',[48.5,21,0.6,21],'bodyD'],['r',[76.5,21,0.6,21],'bodyD'],['r',[70,26,3.5,0.9],'bodyD'],['p','1.6,28 3.6,25.4 15,24.4 14,27.6','#e8f4ff'],
+   ['p','0.4,32 6,32 6.2,37.5 0.5,37.5','#18181e'],['p','114.6,9 117.4,10 117.4,22 115,21','#d8202c'],['p','26,21.6 30.5,18.8 32,21.6','body']]},
+ {id:'kei',w:85,h:43,wheels:[[15,7.2],[69,7.2]],shoulder:23,rocker:34,caliper:'#55585f',
+  body:'2,39 0.3,32 0.5,26 2.4,22.6 8,21 15,20 20,11 24,4.5 28,2.4 78,2 82.5,3 84.5,6 85,18 85,35 84,38.6 79,39',
+  glass:'17.4,20 21.4,12 25,6 28.5,4.2 78,4 81.6,5.2 82.6,8 82.6,18.5',
+  parts:[['r',[40,4.2,2.5,16],'#1a1a22'],['r',[63,4,2.5,15],'#1a1a22'],['r',[41.5,20,0.6,17],'bodyD'],['r',[64,19.5,0.6,17],'bodyD'],
+   ['r',[56,22,3,0.9],'bodyD'],['r',[34,22.5,3,0.9],'bodyD'],['p','1.4,24.5 3,22.4 10,21.6 9.4,24','#e8f4ff'],['p','0.4,27.5 5,27.5 5.2,33 0.5,33','#18181e'],
+   ['p','82.8,8 84.8,8.6 84.8,18 82.8,17.6','#d8202c']]},
+ {id:'truck',w:150,h:62,wheels:[[22,10],[118,10]],shoulder:32,rocker:48,sharp:true,caliper:'#55585f',
+  body:'0.5,56 0,24 1.4,12 4,7.5 9,6 36,6 39,8 39.5,51 150,51 150,3.5 40.5,3.5 40.5,56',
+  glass:'4,10.5 34.5,10.5 34.5,27 2.2,27',
+  parts:[['r',[41,4,109,47],'#c9ccd2'],['r',[41,4,109,2],'#e8eaee'],['r',[41,49,109,2],'#8a8e96'],['r',[147,4,3,47],'#b3b7be'],
+   ['r',[60,6,0.8,43],'#a3a7ae'],['r',[80,6,0.8,43],'#a3a7ae'],['r',[100,6,0.8,43],'#a3a7ae'],['r',[120,6,0.8,43],'#a3a7ae'],['r',[140,6,0.8,43],'#a3a7ae'],
+   ['r',[24,11,0.6,40],'bodyD'],['r',[28,30,3.5,0.9],'bodyD'],['r',[0,45,8,6],'#18181e'],['r',[0,36,2.5,5],'#e8f4ff'],['r',[147,40,3,6],'#d8202c'],
+   ['r',[40,51,110,3.5],'#2a2a30'],['r',[60,54,40,2],'#3a3a42'],['r',[2,30,1,5],'#18181e']]},
+ {id:'sports',w:105,h:31,wheels:[[20,8],[85,8]],shoulder:14,rocker:23,caliper:'#c8202a',
+  body:'2,27.5 0.3,23 0.4,18.5 2,16 8,14.6 24,13 40,11.4 50,9.4 58,4.6 64,2.6 71,2 78,2.8 86,6.4 94,9.4 101,10.4 104,12 105,15 105,21.5 103.8,27',
+  glass:'52,9.6 58.8,5.5 64.6,3.6 71,3.2 77.4,3.9 85,7.6 89,9.6',
+  parts:[['r',[75,3.6,0.8,6],'#1a1a22'],['p','1.2,17.6 2.6,15.8 13,14.6 12,16.4','#e8f4ff'],['p','0.4,21 10,21 10.5,25 1,25','#18181e'],
+   ['p','99,10.6 104.4,12 104.6,15.2 99.5,14.2','#d8202c'],['r',[50,10.5,0.6,14],'bodyD'],['r',[79,9.5,0.6,15],'bodyD'],['r',[72,13,3.5,0.9],'bodyD'],
+   ['p','53,9.6 57,7.6 58.6,9.6','body'],['p','31,15 36,15 35,18 31,18','#18181e'],['r',[30,25.4,48,1.6],'#24242c']]},
+ {id:'suv',w:115,h:43,wheels:[[23,9.3],[91,9.3]],shoulder:20,rocker:31,cladding:32,caliper:'#55585f',
+  body:'2,38 0.3,31 0.5,24 2.4,20.6 9,19 26,17.4 40,16 45,13 54,4.6 60,2.4 104,2.2 110,3.4 113,7 114.6,15 115,30 114,37.4 108,38',
+  glass:'44,16 48.5,12 55,5.6 60.4,4 103,3.8 108.4,5.2 110.8,8.6 111.4,14.6',
+  parts:[['r',[70,4,2.5,12],'#1a1a22'],['r',[91,3.8,2.5,11],'#1a1a22'],['p','104,3.8 108.4,5.2 110.8,8.6 111.4,14.6 106,15','body'],
+   ['r',[56,0.6,46,1.6],'#2a2a30'],['r',[44.5,17,0.6,15],'bodyD'],['r',[72.5,16,0.6,16],'bodyD'],['p','92,15 92.6,15 91.6,31 91,31','bodyD'],
+   ['r',[63,19,3.5,0.9],'bodyD'],['r',[85,18,3.5,0.9],'bodyD'],['p','1.4,23.4 3,21 14,20 13,22.6','#e8f4ff'],['p','0.4,26 5.5,26 5.7,31 0.5,31','#18181e'],
+   ['p','111,7 114.6,9 114.8,18.5 111.5,18','#d8202c'],['p','47,16 51.5,13.4 53.5,16','body']]},
+];
+const OTHER_COLORS=['#d8312b','#f2f2f2','#f5c518','#2a2a2e','#b9bec6','#3d8f4e','#ef7d22','#e86fa8','#8b5a2b','#5a6e86','#7a1f2e'];
+const RIMS={gold:['#c9a227','#8a6c12'],silver:['#b8bec8','#6c7380'],steel:['#9aa0a8','#5a5f66'],dark:['#55585f','#2e3036']};
+const CALIPER={sti:'#c8202a','22b':'#c8202a',brz:'#c8202a',levorg:'#3a3d44',forester:'#3a3d44',outback:'#3a3d44',legacy:'#3a3d44',xv:'#3a3d44',s360:null,sambar:null};
+const PAD=3, CS=2; // 車は2倍の解像度で描いて半分の大きさで表示する（細部まで出る）
+function chaikin(P,n){for(let k=0;k<n;k++){const Q=[];for(let i=0;i<P.length;i++){const a=P[i],b=P[(i+1)%P.length];
+  Q.push([a[0]*0.75+b[0]*0.25,a[1]*0.75+b[1]*0.25],[a[0]*0.25+b[0]*0.75,a[1]*0.25+b[1]*0.75]);}P=Q;}return P;}
+function bbox(P){const xs=P.map(p=>p[0]),ys=P.map(p=>p[1]);return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];}
+function renderCar(m,color,frame){
+  const c=document.createElement('canvas');c.width=(m.w+PAD*2)*CS;c.height=(m.h+PAD*2)*CS;const g=c.getContext('2d');
+  g.scale(CS,CS);g.translate(PAD,PAD);g.lineJoin='round';g.lineCap='round';
+  const pal=new Set([OUTLINE]);const F=col=>{pal.add(col);g.fillStyle=col;};const S=col=>{pal.add(col);g.strokeStyle=col;};
+  const T={L2:shade(color,70),L:shade(color,34),B:color,D:shade(color,-28),D2:shade(color,-58)};
+  Object.values(T).forEach(v=>pal.add(v));
+  const tone={body:color,bodyD:T.D,bodyL:T.L};
+  const col=x=>tone[x]||x;
+  // 車体：角を少し丸め、上から下へ陰影（屋根が明るく、キャラクターラインで光り、裾が暗い）
+  const bp=m.sharp?pts(m.body):chaikin(pts(m.body),1);
+  const hh=m.h, sh=m.shoulder/hh, rk=m.rocker/hh;
+  const lg=g.createLinearGradient(0,0,0,hh);
+  lg.addColorStop(0,T.L);lg.addColorStop(Math.max(0,sh-0.12),T.B);lg.addColorStop(sh-0.01,T.B);lg.addColorStop(sh,T.L2);lg.addColorStop(Math.min(1,sh+0.04),T.L);
+  lg.addColorStop(Math.min(1,sh+0.1),T.B);lg.addColorStop(rk,T.D);lg.addColorStop(1,T.D2);
+  path(g,bp);g.fillStyle=lg;g.fill();
+  g.save();path(g,bp);g.clip();
+  // 斜めの映り込み
+  g.fillStyle=T.L;g.globalAlpha=0.35;path(g,[[m.w*0.18,m.shoulder+1],[m.w*0.26,m.shoulder+1],[m.w*0.2,m.rocker],[m.w*0.12,m.rocker]]);g.fill();g.globalAlpha=1;
+  if(m.cladding){F('#2a2a30');g.fillRect(0,m.cladding,m.w,m.h);for(const [x,r] of m.wheels){g.beginPath();g.arc(x,m.h-r,r+3.2,0,7);g.fill();}}
+  if(m.flare){for(const [x,r] of m.wheels){F(T.D);g.beginPath();g.arc(x,m.h-r,r+3.6,Math.PI,0);g.fill();F(T.B);g.beginPath();g.arc(x,m.h-r,r+2.6,Math.PI,0);g.fill();}}
+  for(const [x,r] of m.wheels){F('#0c0c10');g.beginPath();g.arc(x,m.h-r,r+1.6,0,7);g.fill();F('#1c1c22');g.beginPath();g.arc(x,m.h-r+1.2,r+0.6,Math.PI,0);g.fill();}
+  // 裾のプレスライン
+  F(T.D2);g.fillRect(0,m.rocker-0.5,m.w,0.6);
+  g.restore();
+  // ガラス：空の映り込み（上が明るい）＋斜めの反射、黒い窓枠
+  if(m.glass){
+    const gp=pts(m.glass),[gx0,gy0,gx1,gy1]=bbox(gp);
+    const gg=g.createLinearGradient(0,gy0,0,gy1);['#a9cbe6','#5f84a8','#33496b','#1b263a'].forEach((v,i)=>{gg.addColorStop(i/3,v);pal.add(v);});
+    path(g,gp);g.fillStyle=gg;g.fill();
+    g.save();path(g,gp);g.clip();
+    F('#c9def0');path(g,[[gx0+6,gy1],[gx0+9,gy1],[gx0+17,gy0],[gx0+14,gy0]]);g.fill();
+    F('#7fa6c8');path(g,[[gx0+12,gy1],[gx0+13.5,gy1],[gx0+21.5,gy0],[gx0+20,gy0]]);g.fill();
+    g.restore();
+    path(g,gp);S('#16161c');g.lineWidth=0.8;g.stroke();
+  }
+  // パーツ（ライトは中の反射も描く）
+  for(const [k,d,cc] of m.parts){
+    const cl=col(cc);F(cl);
+    if(k==='r'){g.fillRect(d[0],d[1],d[2],d[3]);continue;}
+    const P=pts(d);path(g,P);g.fill();
+    if(cl==='#e8f4ff'){const [a,b2,c2,d2]=bbox(P);F('#ffffff');g.beginPath();g.arc(a+(c2-a)*0.65,b2+(d2-b2)*0.5,Math.min(1.2,(d2-b2)*0.35),0,7);g.fill();
+      S('#9fb4c8');g.lineWidth=0.4;path(g,P);g.stroke();}
+    if(cl==='#d8202c'){const [a,b2,c2,d2]=bbox(P);F('#ff7070');g.fillRect(a+0.6,b2+(d2-b2)*0.3,(c2-a)-1.2,0.8);}
+  }
+  // ホイール：タイヤの溝・サイドウォール・リムの縁の光・ブレーキディスク・キャリパー・スポーク
+  const [rc,rd]=RIMS[m.rim||'dark'],rl=shade(rc,45),cal=m.caliper!==undefined?m.caliper:(CALIPER[m.id]!==undefined?CALIPER[m.id]:'#55585f');
+  for(const [x,r] of m.wheels){
+    const cy=m.h-r,a0=frame*(Math.PI*2/5)/4;
+    F('#17171b');g.beginPath();g.arc(x,cy,r,0,7);g.fill();
+    S('#2e2e36');g.lineWidth=0.9;g.beginPath();g.arc(x,cy,r-1.3,0,7);g.stroke();
+    F('#0a0a0c');for(let i=0;i<14;i++){const a=a0*0.8+i*Math.PI/7;g.fillRect(x+Math.cos(a)*(r-0.5)-0.4,cy+Math.sin(a)*(r-0.5)-0.4,0.8,0.8);}
+    F(rd);g.beginPath();g.arc(x,cy,r-2.4,0,7);g.fill();
+    if(m.rim!=='steel'){
+      F('#7a7d84');g.beginPath();g.arc(x,cy,r-3.6,0,7);g.fill();                          // ディスク
+      if(cal){F(cal);g.beginPath();g.arc(x,cy,r-3.4,-2.5,-1.5);g.arc(x,cy,r-5.4,-1.5,-2.5,true);g.closePath();g.fill();}
+      const n=m.rim==='gold'?10:5;
+      for(let s=0;s<n;s++){const a=a0+s*Math.PI*2/n;
+        S(rc);g.lineWidth=n===10?0.9:1.6;g.beginPath();g.moveTo(x,cy);g.lineTo(x+Math.cos(a)*(r-2.5),cy+Math.sin(a)*(r-2.5));g.stroke();
+        S(rd);g.lineWidth=0.4;g.beginPath();g.moveTo(x+Math.cos(a+0.25)*1.8,cy+Math.sin(a+0.25)*1.8);g.lineTo(x+Math.cos(a+0.12)*(r-2.7),cy+Math.sin(a+0.12)*(r-2.7));g.stroke();}
+      S(rl);g.lineWidth=0.6;g.beginPath();g.arc(x,cy,r-2.5,Math.PI*1.05,Math.PI*1.75);g.stroke();
+    }else{ // 鉄ちん＋キャップ
+      F(rc);g.beginPath();g.arc(x,cy,r-2.6,0,7);g.fill();F(rd);for(let s=0;s<4;s++){const a=a0+s*Math.PI/2;g.beginPath();g.arc(x+Math.cos(a)*(r-4.2),cy+Math.sin(a)*(r-4.2),0.8,0,7);g.fill();}
+      F(rl);g.beginPath();g.arc(x,cy,r-4.8,0,7);g.fill();
+    }
+    F(shade(rc,-20));g.beginPath();g.arc(x,cy,1.7,0,7);g.fill();F(rl);g.fillRect(x-0.5,cy-0.9,1,0.6);
+  }
+  pixelize(c,pal);
+  return c;
+}
+function heightMap(c){ // 2倍で描いた絵から、ゲーム座標（1倍）での列ごとの上面を出す
+  const g=c.getContext('2d'),d=g.getImageData(0,0,c.width,c.height).data,top=[];
+  for(let xw=0;xw<c.width/CS;xw++){let t=Infinity;
+    for(let sx=xw*CS;sx<xw*CS+CS;sx++)for(let y=0;y<c.height;y++){if(d[(y*c.width+sx)*4+3]){t=Math.min(t,y);break;}}
+    top[xw]=t===Infinity?Infinity:Math.floor(t/CS);}
+  return top;
+}
+const CAR_CACHE={};
+function getCar(m,color){
+  const key=m.id+color;
+  if(!CAR_CACHE[key]){const fr=[0,1,2,3].map(f=>renderCar(m,color,f));CAR_CACHE[key]={fr,top:heightMap(fr[0])};}
+  return CAR_CACHE[key];
+}
+SUBARU_MODELS.forEach(m=>getCar(m,m.color));
+
+// ---------- 音（効果音＋BGM。どちらもWebAudioで合成。曲はこのゲーム用のオリジナル） ----------
+let AC=null,OUT=null,SFX=null,MUS=null;
+let MUTED=false;try{MUTED=localStorage.getItem('gogoimo_mute')==='1';}catch(e){}
+function audio(){
+  if(!AC){
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    OUT=AC.createGain();OUT.gain.value=MUTED?0:1;OUT.connect(AC.destination);
+    SFX=AC.createGain();SFX.gain.value=0.9;SFX.connect(OUT);
+    MUS=AC.createGain();MUS.gain.value=0.45;MUS.connect(OUT);
+  }
+  if(AC.state==='suspended')AC.resume();
+  return AC;
+}
+function setMute(m){MUTED=m;try{localStorage.setItem('gogoimo_mute',m?'1':'0');}catch(e){}if(OUT)OUT.gain.value=m?0:1;}
+let NOISE=null;
+function noiseBuf(){if(!NOISE){const n=AC.sampleRate*0.5;NOISE=AC.createBuffer(1,n,AC.sampleRate);const d=NOISE.getChannelData(0);for(let i=0;i<n;i++)d[i]=Math.random()*2-1;}return NOISE;}
+function tone(f1,f2,dur,wave,vol,delay=0,dest){
+  const t=AC.currentTime+delay;
+  const o=AC.createOscillator(),g=AC.createGain();o.type=wave;
+  o.frequency.setValueAtTime(f1,t);o.frequency.exponentialRampToValueAtTime(Math.max(20,f2),t+dur);
+  g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  o.connect(g);g.connect(dest||SFX);o.start(t);o.stop(t+dur+0.02);
+}
+function noise(dur,vol,delay=0,hp=1000,dest){
+  const t=AC.currentTime+delay,s=AC.createBufferSource(),f=AC.createBiquadFilter(),g=AC.createGain();
+  s.buffer=noiseBuf();f.type='highpass';f.frequency.value=hp;
+  g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  s.connect(f);f.connect(g);g.connect(dest||SFX);s.start(t);s.stop(t+dur+0.02);
+}
+function snd(type){
+  try{
+    audio();
+    if(type==='jump') tone(300,700,0.12,'square',0.06);
+    if(type==='jump2'){tone(500,1100,0.1,'square',0.05);tone(800,1600,0.1,'triangle',0.04,0.05);}
+    if(type==='dry') tone(300,180,0.18,'triangle',0.06);
+    if(type==='stomp'){tone(500,120,0.12,'square',0.08);tone(900,1400,0.08,'triangle',0.06,0.05);noise(0.08,0.15,0,2000);}
+    if(type==='hurt'){tone(220,60,0.35,'sawtooth',0.09);noise(0.2,0.12,0,300);}
+    if(type==='honk'){tone(392,392,0.18,'square',0.07);tone(330,330,0.28,'square',0.07,0.2);}
+    if(type==='heal'){tone(660,660,0.08,'triangle',0.08);tone(880,880,0.08,'triangle',0.08,0.09);tone(1320,1320,0.12,'triangle',0.08,0.18);}
+    if(type==='water'){for(let i=0;i<4;i++)tone(300+i*60,180+i*60,0.07,'sine',0.12,i*0.08);}
+    if(type==='mecha'){[262,330,392,523,659,784].forEach((f,i)=>tone(f,f,0.12,'square',0.07,i*0.07));}
+    if(type==='mechaEnd'){[784,659,523,392].forEach((f,i)=>tone(f,f,0.1,'square',0.05,i*0.08));}
+    if(type==='blow'){tone(160,40,0.4,'sawtooth',0.1);tone(900,200,0.25,'square',0.05,0.02);noise(0.35,0.25,0,200);}
+    if(type==='cone'){tone(200,120,0.1,'square',0.06);noise(0.06,0.12,0,3000);}
+    if(type==='stage'){[523,659,784,1047].forEach((f,i)=>tone(f,f,0.14,'square',0.06,i*0.1));}
+    if(type==='clear'){[523,523,523,659,784,659,784,1047].forEach((f,i)=>tone(f,f,i==7?0.6:0.14,'square',0.07,[0,.12,.24,.36,.6,.84,.96,1.2][i]));}
+    if(type==='ring'){for(let k=0;k<2;k++)for(let i=0;i<8;i++)tone(i%2?1320:1100,i%2?1320:1100,0.05,'square',0.05,k*0.9+i*0.06);}
+    if(type==='over'){[392,370,349,330].forEach((f,i)=>tone(f,f*0.98,i==3?0.8:0.3,'triangle',0.1,i*0.32));}
+  }catch(e){}
+}
+// ---- BGM（16分音符×16ステップ×4小節のループ。数字は根音からの半音、-1は休符） ----
+const SONGS=[
+ { // 横浜：明るく出発
+  tempo:150,root:60,
+  lead:[[0,-1,4,-1,7,-1,4,7,9,-1,7,-1,4,-1,2,-1],[0,-1,4,-1,7,-1,9,-1,12,-1,11,9,7,-1,-1,-1],
+        [5,-1,9,-1,12,-1,9,12,14,-1,12,-1,9,-1,7,-1],[7,-1,5,4,2,-1,4,-1,0,-1,-1,-1,-1,-1,-1,-1]],
+  bass:[0,0,5,7]},
+ { // 東京：ちょっと都会っぽく
+  tempo:162,root:62,
+  lead:[[0,-1,0,3,-1,5,-1,7,-1,7,5,-1,3,-1,0,-1],[0,-1,0,3,-1,5,-1,7,-1,10,-1,7,8,-1,7,-1],
+        [5,-1,5,8,-1,10,-1,12,-1,12,10,-1,8,-1,5,-1],[7,-1,8,7,5,-1,3,-1,2,-1,-1,3,2,-1,-1,-1]],
+  bass:[0,0,5,7]},
+ { // 埼玉：のどかに軽快
+  tempo:156,root:65,
+  lead:[[7,-1,9,-1,12,-1,9,-1,7,-1,4,-1,2,-1,4,-1],[7,-1,9,-1,12,-1,14,-1,16,-1,14,-1,12,-1,-1,-1],
+        [9,-1,12,-1,14,-1,12,-1,9,-1,7,-1,5,-1,7,-1],[4,-1,2,-1,0,-1,2,-1,4,-1,-1,-1,7,-1,-1,-1]],
+  bass:[0,-3,5,7]},
+ { // 群馬 太田：ゴールへ一直線
+  tempo:172,root:67,
+  lead:[[0,-1,-1,7,-1,-1,12,-1,11,-1,12,-1,14,-1,12,-1],[9,-1,-1,7,-1,-1,5,-1,4,-1,5,-1,7,-1,-1,-1],
+        [5,-1,-1,9,-1,-1,12,-1,14,-1,16,-1,17,-1,16,-1],[14,-1,12,-1,11,-1,7,-1,12,-1,-1,-1,-1,-1,-1,-1]],
+  bass:[0,-3,5,7]},
+];
+const MECHA_SONG={tempo:190,root:64,
+  lead:[[0,4,7,12,0,4,7,12,0,4,7,12,7,4,0,-1],[0,4,7,12,0,4,7,12,0,4,7,12,7,4,0,-1],
+        [0,3,7,12,0,3,7,12,0,3,7,12,7,3,0,-1],[2,5,9,14,2,5,9,14,2,5,9,14,9,5,2,-1]],
+  bass:[0,0,5,7]};
+const BGM={on:false,step:0,next:0,timer:null,song:0};
+const mtof=m=>440*Math.pow(2,(m-69)/12);
+function bgmNote(f,t,dur,wave,vol){
+  const o=AC.createOscillator(),g=AC.createGain();o.type=wave;o.frequency.setValueAtTime(f,t);
+  g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(vol,t+0.005);g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  o.connect(g);g.connect(MUS);o.start(t);o.stop(t+dur+0.02);
+}
+function bgmDrum(kind,t){
+  if(kind==='k'){const o=AC.createOscillator(),g=AC.createGain();o.type='sine';o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(40,t+0.12);
+    g.gain.setValueAtTime(0.5,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.14);o.connect(g);g.connect(MUS);o.start(t);o.stop(t+0.16);}
+  else{const s=AC.createBufferSource(),f=AC.createBiquadFilter(),g=AC.createGain();s.buffer=noiseBuf();f.type='highpass';f.frequency.value=kind==='s'?1500:7000;
+    const d=kind==='s'?0.12:0.03;g.gain.setValueAtTime(kind==='s'?0.25:0.08,t);g.gain.exponentialRampToValueAtTime(0.001,t+d);s.connect(f);f.connect(g);g.connect(MUS);s.start(t);s.stop(t+d+0.02);}
+}
+function bgmTick(){
+  if(!BGM.on)return;
+  while(BGM.next<AC.currentTime+0.12){
+    const S=(G.p&&G.p.mecha>0)?MECHA_SONG:SONGS[BGM.song];
+    const st=60/S.tempo/4, i=BGM.step%16, bar=((BGM.step/16)|0)%4, t=BGM.next;
+    const n=S.lead[bar][i];
+    if(n>=0)bgmNote(mtof(S.root+12+n),t,st*1.8,'square',0.07);
+    if(n>=0&&S!==MECHA_SONG)bgmNote(mtof(S.root+24+n),t+st*0.5,st*0.9,'triangle',0.025); // こだま
+    if(i%2===0){const b=S.bass[bar]+(i%4===2?12:0);bgmNote(mtof(S.root-12+b),t,st*1.6,'triangle',0.16);}
+    if(i===0||i===8)bgmDrum('k',t);
+    if(i===4||i===12)bgmDrum('s',t);
+    if(i%2===1)bgmDrum('h',t);
+    BGM.next+=st;BGM.step++;
+  }
+}
+function bgmStart(song){
+  try{audio();}catch(e){return;}
+  BGM.song=song||0;
+  if(!BGM.on){BGM.on=true;BGM.step=0;BGM.next=AC.currentTime+0.05;BGM.timer=setInterval(bgmTick,25);}
+}
+function bgmSet(song){ // 小節の頭で切り替わるよう、ステップを小節の頭にそろえる
+  if(BGM.song===song)return;BGM.song=song;BGM.step=Math.ceil(BGM.step/16)*16;
+}
+function bgmStop(){BGM.on=false;if(BGM.timer){clearInterval(BGM.timer);BGM.timer=null;}}
+
+// ---------- 入力 ----------
+const key={left:false,right:false,jump:false};let jumpPressed=false;
+const KM={ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',Space:'jump',ArrowUp:'jump',KeyZ:'jump',KeyW:'jump'};
+addEventListener('keydown',e=>{if(e.target&&e.target.tagName==='INPUT')return;
+  if(e.code==='KeyP'||e.code==='Escape'){if(G.mode==='play'){e.preventDefault();setPause(!G.paused);}return;}
+  if(G.paused){if(e.code==='Space'||e.code==='Enter'){e.preventDefault();setPause(false);}return;}
+  const k=KM[e.code];if(k){e.preventDefault();if(k==='jump'&&!key.jump)jumpPressed=true;key[k]=true;}
+  if(e.code==='Enter'||e.code==='Space') startIfIdle();});
+addEventListener('keyup',e=>{const k=KM[e.code];if(k)key[k]=false;});
+const sndBtn=document.getElementById('snd');
+function sndLabel(){sndBtn.textContent='♪';sndBtn.classList.toggle('off',MUTED);}
+sndBtn.addEventListener('click',e=>{e.stopPropagation();setMute(!MUTED);sndLabel();sndBtn.blur();});
+addEventListener('keydown',e=>{if(e.target&&e.target.tagName==='INPUT')return;if(e.code==='KeyM'){setMute(!MUTED);sndLabel();}});
+sndLabel();
+// 操作は「画面のどこでもタップ＝ジャンプ」だけ（長押しで高く、空中でもう一回タップで二段ジャンプ）
+sndBtn.addEventListener('pointerdown',e=>e.stopPropagation());
+let fsTried=false;
+function tryLandscape(){ // できる端末では全画面＋横向き固定（だめでも画面を回して表示するので問題なし）
+  if(fsTried||!isTouch())return;fsTried=true;
+  try{const el=document.documentElement,req=el.requestFullscreen||el.webkitRequestFullscreen;
+    if(req){const pr=req.call(el);if(pr&&pr.then)pr.then(()=>screen.orientation&&screen.orientation.lock&&screen.orientation.lock('landscape').catch(()=>{})).catch(()=>{});}
+  }catch(e){}
+}
+addEventListener('pointerdown',e=>{
+  if(e.target===sndBtn||(e.target.closest&&e.target.closest('#rankBtn,#rank,#pauseBtn,#notice')))return;
+  if(G.paused){e.preventDefault();setPause(false);return;}
+  e.preventDefault();
+  if(G.mode==='play'){if(!key.jump)jumpPressed=true;key.jump=true;}
+  else{tryLandscape();startIfIdle();}
+},{passive:false});
+const tapUp=()=>{key.jump=false;};
+// 起動時のおことわり：1秒たったら消す
+{const nt=document.getElementById('notice');setTimeout(()=>{nt.classList.add('hide');setTimeout(()=>nt.remove(),400);},1000);}
+// ---------- 一時停止 ----------
+const pauseBtn=document.getElementById('pauseBtn');
+function setPause(on){
+  if(on&&G.mode!=='play')return;
+  G.paused=!!on;key.jump=false;jumpPressed=false;
+  pauseBtn.textContent=G.paused?'▶':'⏸';
+  if(G.paused)bgmStop();else bgmStart(G.stage||0);
+}
+pauseBtn.addEventListener('pointerdown',e=>e.stopPropagation());
+pauseBtn.addEventListener('click',e=>{e.stopPropagation();setPause(!G.paused);pauseBtn.blur();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&G.mode==='play'&&!G.paused)setPause(true);}); // 別のアプリに切り替えたら自動で止める
+
+// ---------- みんなのランキング（Web公開版：Googleのスプレッドシートに保存） ----------
+// だれでも登録できる。1人1件（この端末に作ったidで区別）。行きのスコア・帰り道のタイムとも上位10件だけ残る
+const RANK_API='https://script.google.com/macros/s/AKfycbz15xooJB_hZRQkrO8hTfL2gzp5PT0jH1MWWTKGpz7ImLPIlTaG514vDbaBdiy7SMy_Rg/exec';
+const RANK={rows:{score:[],time:[]},ok:false,status:'',uid:'',tokGo:'',tokRet:'',my:{score:0,time:0}};
+let rankName='';try{rankName=localStorage.getItem('gogoimo_name')||'';}catch(e){}
+try{RANK.uid=localStorage.getItem('gogoimo_uid')||'';}catch(e){}
+if(!/^[a-z0-9]{16,40}$/.test(RANK.uid)){RANK.uid=Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(36).padStart(2,'0')).join('').slice(0,24);try{localStorage.setItem('gogoimo_uid',RANK.uid);}catch(e){}}
+const rankBtn=document.getElementById('rankBtn'),rankEl=document.getElementById('rank'),rkName=document.getElementById('rkName');
+rkName.value=rankName;
+const RANK_MAX=10;
+function topList(kind){return RANK.rows[kind]||[];}
+function renderRank(){
+  if(rankEl.hidden)return;
+  for(const [kind,id] of [['score','rkScore'],['time','rkTime']]){
+    const ol=document.getElementById(id);ol.textContent='';
+    const rs=topList(kind).slice(0,RANK_MAX);
+    if(!rs.length){const li=document.createElement('li');li.textContent=RANK.ok?'まだ記録なし':'読み込み中…';li.style.listStyle='none';ol.appendChild(li);}
+    for(const r of rs){const li=document.createElement('li');if(r.me)li.className='me';
+      li.textContent=String(r.n||'名無しのいもっち').slice(0,12);const sp=document.createElement('span');
+      sp.textContent=kind==='score'?String(r.v):fmtTime(r.v);li.appendChild(sp);ol.appendChild(li);}
+  }
+  let st=RANK.status;
+  if(!st&&RANK.ok)st='自分のベストを更新して10位以内に入ると自動で登録されます（11位以下になった記録は消えます）';
+  document.getElementById('rkStatus').textContent=st;
+}
+function rankLine(kind,val){ // クリア・ゲームオーバー画面の「みんなの中で◯位」
+  if(!RANK.ok||!(val>0))return '';
+  const rs=topList(kind).filter(r=>!r.me);
+  const pos=1+rs.filter(r=>kind==='score'?r.v>val:r.v<val).length;
+  return pos<=RANK_MAX?`みんなのランキング ${pos}位！`:'みんなのランキング 10位圏外';
+}
+function apply(res){
+  if(!res||!res.ok)return false;
+  RANK.rows={score:res.score||[],time:res.time||[]};RANK.ok=true;
+  const ms=RANK.rows.score.find(r=>r.me),mt=RANK.rows.time.find(r=>r.me);
+  if(ms)RANK.my.score=Math.max(RANK.my.score,ms.v);if(mt)RANK.my.time=RANK.my.time>0?Math.min(RANK.my.time,mt.v):mt.v;
+  renderRank();return true;
+}
+async function api(body){ // text/plain で送ると、ブラウザの事前確認なしでGoogleに届く
+  const r=await fetch(RANK_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({u:RANK.uid},body))});
+  return r.json();
+}
+async function loadRank(){
+  try{const r=await fetch(RANK_API+'?u='+encodeURIComponent(RANK.uid));if(!apply(await r.json()))throw 0;
+    if(RANK.status==='ランキングを読み込めませんでした')RANK.status='';}
+  catch(e){RANK.status='ランキングを読み込めませんでした';}
+  renderRank();
+}
+// ゲーム開始のたびに「札」をもらう（これがないと登録できない＝ズル対策）
+function rankStart(ret){
+  api({a:'start'}).then(res=>{if(res&&res.ok){if(ret)RANK.tokRet=res.t;else{RANK.tokGo=res.t;RANK.tokRet='';}}}).catch(()=>{});
+}
+function rankPos(kind,val){const rs=topList(kind).filter(r=>!r.me);return 1+rs.filter(r=>kind==='score'?r.v>=val:r.v<=val).length;}
+function submitRank(kind,val){
+  val=Math.round(val);if(!(val>0))return;
+  const better=kind==='score'?val>RANK.my.score:!(RANK.my.time>0)||val<RANK.my.time;
+  if(!better)return;
+  if(RANK.ok&&rankPos(kind,val)>RANK_MAX)return;                 // 10位に入らない記録は送らない
+  const t=kind==='time'?RANK.tokRet:RANK.tokGo;if(!t)return;
+  api({a:'submit',k:kind,v:val,t,n:rankName}).then(res=>{
+    if(apply(res)){if(res.saved){RANK.status='ランキングに登録しました！';renderRank();setTimeout(()=>{RANK.status='';renderRank();},3000);}}
+    else if(res&&res.err==='wait')setTimeout(()=>submitRank(kind,val),5500);
+  }).catch(()=>{RANK.status='ランキングに送れませんでした';renderRank();});
+}
+document.getElementById('rkSave').addEventListener('click',()=>{
+  const nm=rkName.value.trim().slice(0,12);
+  api({a:'name',n:nm}).then(res=>{
+    if(res&&res.err==='ng'){RANK.status='その名前は使えません';renderRank();return;}
+    rankName=nm;try{localStorage.setItem('gogoimo_name',rankName);}catch(e){}
+    apply(res);RANK.status='名前を保存しました';renderRank();setTimeout(()=>{RANK.status='';renderRank();},2000);
+  }).catch(()=>{RANK.status='保存できませんでした（通信エラー）';renderRank();});
+});
+rankBtn.addEventListener('click',e=>{e.stopPropagation();rankEl.hidden=!rankEl.hidden;if(!rankEl.hidden)loadRank();renderRank();rankBtn.blur();});
+document.getElementById('rkClose').addEventListener('click',()=>{rankEl.hidden=true;});
+loadRank();
+
+addEventListener('pointerup',tapUp);addEventListener('pointercancel',tapUp);
+
+function rnd(a,b){return a+Math.random()*(b-a);}
+function pick(a){return a[(Math.random()*a.length)|0];}
+
+// ---------- 背景（ステージ：横浜→東京→埼玉→群馬 太田） ----------
+// 背景は 320x180 の座標で描いて 1.5倍する。空気遠近（遠いほど薄く青く）・陰影・窓・街灯で少しリアルに
+function rect(x,y,w,h,col){ctx.fillStyle=col;ctx.fillRect(Math.round(x),Math.round(y),w,h);}
+function seeded(s){return ()=>{s=(s*16807)%2147483647;return s/2147483647;};}
+function tile(off,span,fn){let b=-(off%span);if(b>0)b-=span;for(;b<320;b+=span)fn(b);}
+function poly(P,col){ctx.fillStyle=col;ctx.beginPath();P.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();ctx.fill();}
+function sky(stops){const g=ctx.createLinearGradient(0,0,0,140);stops.forEach((c,i)=>g.addColorStop(i/(stops.length-1),c));ctx.fillStyle=g;ctx.fillRect(-4,-4,328,188);}
+function sunGlow(x,y,r,core,glow){
+  const g=ctx.createRadialGradient(x,y,0,x,y,r*4);g.addColorStop(0,glow);g.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=g;ctx.fillRect(x-r*4,y-r*4,r*8,r*8);ctx.fillStyle=core;ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();
+}
+// もこもこした雲（上が明るく下に影）
+function cloudLayer(off,span,y,scale,lit,dark,seed){
+  const r=seeded(seed),C=[];for(let i=0;i<4;i++)C.push([r()*span,y+r()*16,scale*(0.7+r()*0.6)]);
+  tile(off,span,b=>{for(const [x,cy,s] of C){
+    const puffs=[[0,0,14],[11,-4,10],[-10,-2,9],[20,1,8],[-18,2,6]];
+    ctx.fillStyle=dark;for(const [px,py,pr] of puffs){ctx.beginPath();ctx.ellipse(b+x+px*s,cy+py*s+2*s,pr*s,pr*s*0.55,0,0,7);ctx.fill();}
+    ctx.fillStyle=lit;for(const [px,py,pr] of puffs){ctx.beginPath();ctx.ellipse(b+x+px*s,cy+py*s,pr*s*0.95,pr*s*0.5,0,0,7);ctx.fill();}
+  }});
+}
+// 地平線のかすみ
+function haze(y0,y1,col){const g=ctx.createLinearGradient(0,y0,0,y1);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,col);ctx.fillStyle=g;ctx.fillRect(-4,y0,328,y1-y0);}
+// ビル1棟：右側の影・屋上の設備・窓（明かり／反射）
+function bldg(x,base,w,h,col,seed,lit=0.15){
+  const r=seeded(seed),top=base-h;
+  rect(x,top,w,h,col);
+  const sw=Math.max(2,Math.round(w*0.2));rect(x+w-sw,top,sw,h,shade(col,-28));rect(x,top,w,1,shade(col,26));
+  const glass=shade(col,-45),refl=shade(col,40);
+  for(let wy=top+3;wy<base-2;wy+=4)for(let wx=x+2;wx<x+w-sw-1;wx+=3){
+    const q=r();ctx.fillStyle=q<lit?'#ffe7a0':q<lit+0.25?refl:glass;ctx.fillRect(wx,wy,2,2);
+  }
+  const k=r();
+  if(w>12&&k<0.35){rect(x+3,top-3,5,3,shade(col,-20));rect(x+w-9,top-2,4,2,shade(col,-35));}
+  else if(k<0.55){rect(x+w/2,top-7,1,7,'#9aa3b0');}
+  else if(k<0.7&&w>10){rect(x+2,top-4,6,4,'#c9ccd4');rect(x+3,top-5,4,1,'#9aa3b0');}
+}
+function skyline(off,span,seed,base,hMin,hMax,cols,lit){
+  const r=seeded(seed),B=[];let x=0;
+  while(x<span){const w=10+r()*22|0,h=hMin+r()*(hMax-hMin)|0;B.push([x,w,h,cols[(r()*cols.length)|0],(r()*1e6)|0]);x+=w+(r()*3|0);}
+  tile(off,span,b=>{for(const [bx,w,h,c,s] of B){const X=Math.round(b+bx);if(X>320||X+w<0)continue;bldg(X,base,w,h,c,s,lit);}});
+}
+// 木の茂み
+function trees(off,span,y,col,seed,dens=1){
+  const r=seeded(seed),T=[];for(let x=0;x<span;x+=6+r()*10/dens)T.push([x,4+r()*5]);
+  tile(off,span,b=>{for(const [x,s] of T){ctx.fillStyle=shade(col,-25);ctx.beginPath();ctx.arc(b+x+1,y-s+1,s,0,7);ctx.fill();
+    ctx.fillStyle=col;ctx.beginPath();ctx.arc(b+x,y-s,s,0,7);ctx.fill();ctx.fillStyle=shade(col,25);ctx.fillRect(b+x-s*0.4,y-s*1.5,s*0.6,1);}});
+}
+// 送電線の鉄塔（トラス）
+function pylon(x,base,h){
+  const top=base-h;ctx.strokeStyle='#9aa0ab';ctx.lineWidth=0.8;
+  ctx.beginPath();ctx.moveTo(x-6,base);ctx.lineTo(x-1.5,top);ctx.lineTo(x+1.5,top);ctx.lineTo(x+6,base);ctx.stroke();
+  for(let i=0;i<5;i++){const y1=base-i*h/5,y2=base-(i+1)*h/5,w1=6-4.5*i/5,w2=6-4.5*(i+1)/5;ctx.beginPath();ctx.moveTo(x-w1,y1);ctx.lineTo(x+w2,y2);ctx.moveTo(x+w1,y1);ctx.lineTo(x-w2,y2);ctx.stroke();}
+  rect(x-9,top+6,18,1,'#9aa0ab');rect(x-7,top+13,14,1,'#9aa0ab');
+}
+function guardrail(off){
+  const gr=-((off)%24);
+  rect(0,135,320,1,'#e4e7ee');rect(0,136,320,2,'#b9bec9');rect(0,138,320,1,'#7d8394');
+  for(let x=gr;x<320;x+=24){rect(x,135,2,8,'#8a90a0');rect(x+2,136,1,6,'#5e6474');}
+}
+// 街灯（ガードレールの奥）
+function streetLights(off){
+  tile(off,110,b=>{const x=b+40;rect(x,98,1.5,40,'#7d8394');rect(x+1.5,98,7,1.2,'#7d8394');rect(x+6,97,4,2,'#d9dde6');rect(x+6.5,99,3,1,'#fff2c0');});
+}
+// 道路：アスファルトの粒・路肩線・中央線・歩道の縁石
+function road(d){
+  rect(0,143,320,34,'#3b3c47');
+  const r=seeded(5);ctx.fillStyle='rgba(255,255,255,.05)';
+  const o=-(d%64);for(let i=0;i<70;i++){const x=(r()*384|0),y=144+(r()*32|0);ctx.fillRect(((x+o)%384+384)%384-32,y,1,1);}
+  ctx.fillStyle='rgba(0,0,0,.18)';for(let i=0;i<40;i++){const x=(r()*384|0),y=144+(r()*32|0);ctx.fillRect(((x+o)%384+384)%384-32,y,2,1);}
+  rect(0,143,320,1,'#55566a');rect(0,146,320,1,'rgba(240,240,240,.75)');
+  const dl=-(d%32);for(let x=dl;x<320;x+=32)rect(x,160,16,2,'#f0e6b0');
+  rect(0,174,320,1,'rgba(240,240,240,.75)');
+  rect(0,177,320,6,'#9fa3ad');rect(0,177,320,1,'#c9ccd4');
+  const cl=-(d%20);for(let x=cl;x<320;x+=20)rect(x,177,1,6,'#80848e');
+}
+// ---------- スタート前の場所：「メロンテニスクラブ」のある住宅街（朝） ----------
+// 行きのスタートだけ。走り出すと右から左へ流れていき、横浜の街へ切り替わる
+const HOME_END=1500, HOME_FADE=900;
+const CITY_START=2800, CITY_FADE=1000; // 帰り道：横浜のゴールまで残り2800で、海岸からビル群へ切り替わり始める
+function drawEditCity(d){
+  sky(['#3f8fd6','#8cc8ef','#e6f3f7']);
+  cloudLayer(d*0.02,520,14,1.1,'#ffffff','#c9d9e8',3);
+  skyline(d*0.06,600,71,118,30,70,['#a9bfd6','#b6c8dc','#9fb5cc'],0.0);        // 遠くの高層ビル（かすんで青い）
+  skyline(d*0.16,560,72,132,34,80,['#7f93ab','#8a9cb2','#71859e','#93a3b6'],0.3);  // 中くらい
+  skyline(d*0.34,520,73,140,26,62,['#5d6b80','#687689','#55627a','#6f7c8f','#8a7f74'],0.5); // 少し奥のビル街
+  skyline(d,480,75,143,44,92,['#7a6f66','#6a7484','#857c70','#5f6a7a','#8d8478','#707a88'],0.35); // 道のすぐわきに並ぶビル（道路と同じ速さ）
+  // ゴールのビル：ゲートのすぐ後ろに建つ「編集部」
+  const gx=G.gate?G.gate.x/BG:(GOAL+20)/BG-d; // ゲートの位置（背景の座標）。道路と同じ速さで流れる
+  if(gx>-120&&gx<340){
+    const X=Math.round(gx-14),w=96,top=40;
+    rect(X+3,top+3,w,143-top,'rgba(0,0,0,.22)');
+    rect(X,top,w,143-top,'#d9d4c8');rect(X+w-8,top,8,143-top,'#bdb7aa');rect(X,top,w,2,'#efeae0');
+    for(let y=top+26;y<136;y+=11)for(let x=X+5;x<X+w-12;x+=10){rect(x,y,7,7,'#5b7088');rect(x,y,7,2,'#8fb0cc');}
+    rect(X+6,top+6,w-18,16,'#16245a');rect(X+7,top+7,w-20,14,'#1f3a8a');           // 看板
+    ctx.fillStyle='#ffffff';ctx.font='bold 11px "Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('編集部',X+(w-12)/2+3,top+14.5);
+    rect(X+w/2-14,128,22,15,'#3a4658');rect(X+w/2-13,129,9,14,'#8fb0cc');rect(X+w/2-3,129,9,14,'#8fb0cc'); // 入口
+    rect(X-2,top-4,w+4,4,'#8a8478');rect(X+20,top-14,3,10,'#9aa0ab');rect(X+19,top-15,5,2,'#e8483b');   // 屋上
+  }
+} // 距離600まではこの景色、1500で横浜に切り替わり終わる
+function drawHome(d){
+  sky(['#5aa6e0','#a6d4f2','#eef6f0']);
+  sunGlow(250,34,8,'#fffbe6','rgba(255,250,220,.5)');
+  cloudLayer(d*0.02,520,16,1,'#ffffff','#d2dfea',12);cloudLayer(d*0.04,430,44,0.6,'rgba(255,255,255,.85)','rgba(200,215,230,.85)',19);
+  // 遠くの家並み（かすんだ屋根）と木
+  tile(d*0.08,300,b=>{const r=seeded(31);for(let x=0;x<300;x+=13+r()*8){const w=11+r()*8,h=7+r()*6,X=b+x;
+    rect(X,117-h,w,h,'#c4ccd6');poly([[X-1,117-h],[X+w+1,117-h],[X+w/2,112-h]],['#8f7a70','#7a8796','#8a6e6e'][(r()*3)|0]);}});
+  haze(96,118,'rgba(225,238,245,.55)');
+  trees(d*0.12,260,119,'#5f8f5a',17,1.2);
+  // 中くらいの距離の家（2階建て・瓦屋根・窓）
+  tile(d*0.22,360,b=>{const r=seeded(57);for(let x=0;x<360;x+=40+r()*14){const X=b+x,w=28+r()*8,h=16+r()*5,base=124;
+    const wall=['#efe8dc','#e2e6ea','#f2e2cf','#dfe6dc'][(r()*4)|0],roof=['#5a6476','#7a4a3e','#4e5a4a','#6a5a52'][(r()*4)|0];
+    rect(X,base-h,w,h,wall);rect(X+w-4,base-h,4,h,shade(wall,-22));
+    poly([[X-3,base-h],[X+w+3,base-h],[X+w*0.7,base-h-8],[X+w*0.3,base-h-8]],roof);rect(X-3,base-h,w+6,1,shade(roof,-25));
+    for(let k=0;k<2;k++){rect(X+4+k*12,base-h+4,6,4,'#8fb3cf');rect(X+4+k*12,base-h+4,6,1,'#cfe0ee');rect(X+4+k*12,base-h+11,6,4,'#8fb3cf');}}});
+  // テニスクラブ（コート2面・緑の金網・照明・クラブハウス・看板）と、そのとなりの家並み
+  tile(d*0.4,720,b=>{
+    // いもっちの家：1階が車庫（シャッターが半分あいて青いスバルが見える）、その上に2階建て
+    { const Hx=b+16,base=140,w=74;
+      // 1階：車庫（コンクリートの土台・シャッター・玄関）
+      rect(Hx,base-18,w,18,'#c9c6bf');rect(Hx,base-18,w,1,'#e2dfd8');rect(Hx+w-4,base-18,4,18,'#aaa69e');
+      rect(Hx+4,base-16,44,16,'#5a5c64');rect(Hx+4,base-9,44,9,'#6a6c74');                      // 車庫の中（黒い車が見えるよう明るめ）
+      // 中のスバル（黒・金のホイール）
+      poly([[Hx+8,base-1],[Hx+8,base-7],[Hx+14,base-9],[Hx+22,base-12],[Hx+36,base-12],[Hx+42,base-8],[Hx+45,base-7],[Hx+45,base-1]],'#18181d');rect(Hx+10,base-8,32,0.8,'#4a4a56');
+      rect(Hx+23,base-11,12,3,'#5a6a7c');rect(Hx+9,base-7,4,1.5,'#f4f4f4');
+      ctx.fillStyle='#16161a';ctx.beginPath();ctx.arc(Hx+15,base-1,3,0,7);ctx.arc(Hx+38,base-1,3,0,7);ctx.fill();
+      ctx.fillStyle='#d8b23a';ctx.beginPath();ctx.arc(Hx+15,base-1,1.6,0,7);ctx.arc(Hx+38,base-1,1.6,0,7);ctx.fill();
+      // 半分あいたシャッター（横じま）
+      rect(Hx+4,base-16,44,7,'#b9bcc4');for(let y=base-16;y<base-9;y+=1.5)rect(Hx+4,y,44,0.5,'#9a9ea8');rect(Hx+4,base-9.5,44,1,'#7d818c');
+      rect(Hx+3,base-17,46,1.5,'#8d9099');                                                      // シャッターの箱
+      // 玄関（ドア・ひさし・表札・階段）
+      rect(Hx+54,base-15,10,15,'#7a5236');rect(Hx+55,base-14,8,13,'#8c6244');rect(Hx+61,base-8,1,2,'#e8c060');
+      rect(Hx+52,base-17,14,1.5,'#6a6e78');rect(Hx+52,base-1,14,1,'#b0aca4');
+      rect(Hx+66,base-13,7,4,'#f4f1e6');ctx.fillStyle='#2a2a30';ctx.font='bold 2.6px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('いもっち',Hx+69.5,base-11);
+      // 2階・3階（クリーム色の外壁・窓・ベランダ）
+      const top=base-18-30;
+      rect(Hx,top,w,30,'#f2e8d2');rect(Hx+w-5,top,5,30,'#d8ccb2');rect(Hx,top+14.5,w,1,'#dccfb4');
+      for(let y=top+3;y<top+30;y+=3)rect(Hx,y,w-5,0.4,'rgba(180,160,120,.25)');                 // サイディングの筋
+      // 3階の窓
+      for(const wx of [Hx+8,Hx+28,Hx+52]){rect(wx,top+3,12,8,'#5a6474');rect(wx+1,top+4,10,6,'#8fb3cf');rect(wx+1,top+4,10,1.5,'#cfe2f0');rect(wx+6,top+4,0.6,6,'#e8eef4');}
+      // 2階：大きな窓とベランダ（手すり・物干し・植木鉢）
+      rect(Hx+6,top+17,30,10,'#5a6474');rect(Hx+7,top+18,28,8,'#8fb3cf');rect(Hx+7,top+18,28,1.5,'#cfe2f0');rect(Hx+21,top+18,0.6,8,'#e8eef4');
+      rect(Hx+46,top+18,14,9,'#5a6474');rect(Hx+47,top+19,12,7,'#8fb3cf');
+      rect(Hx+3,top+24,36,6,'rgba(220,226,232,.85)');rect(Hx+3,top+24,36,1,'#9aa3b0');
+      for(let x=Hx+4;x<Hx+39;x+=3)rect(x,top+25,0.6,5,'#9aa3b0');
+      rect(Hx+8,top+20,26,0.4,'#7d8394');rect(Hx+12,top+20.4,5,4,'#ffffff');rect(Hx+19,top+20.4,5,4,'#7fb0e0');   // 物干し（タオル）
+      rect(Hx+34,top+21,3,3,'#a0522d');ctx.fillStyle='#4f8a4a';ctx.beginPath();ctx.arc(Hx+35.5,top+20,2.4,0,7);ctx.fill();
+      // 屋根（片流れ・紺グレー）
+      poly([[Hx-3,top],[Hx+w+3,top],[Hx+w+3,top-4],[Hx-3,top-9]],'#4a5466');rect(Hx-3,top,w+6,1.2,'#353d4c');
+      rect(Hx+w-14,top-11,3,6,'#8a8e98');                                                       // 換気の煙突
+    }
+    const X=b+124; // テニスクラブはいもっちの家の右どなり
+    // 奥の金網フェンス（緑・すける網目）
+    ctx.fillStyle='rgba(46,104,70,.28)';ctx.fillRect(X,100,232,26);
+    ctx.fillStyle='rgba(40,96,62,.55)';for(let x=X;x<X+232;x+=3)ctx.fillRect(x,100,0.5,26);for(let y=100;y<126;y+=3)ctx.fillRect(X,y,232,0.5);
+    for(let x=X;x<=X+232;x+=29){rect(x,98,1.5,28,'#2d5f40');}rect(X,98,233,1.5,'#2d5f40');
+    // 照明塔
+    for(const lx of [X+4,X+226]){rect(lx,74,1.5,52,'#8d939f');rect(lx-4,72,10,3,'#d9dde6');rect(lx-3,75,8,1,'#fff6cc');}
+    // コート2面（緑の外周に青い面・白線・ネット）
+    for(const cx of [X,X+116]){
+      poly([[cx+4,140],[cx+114,140],[cx+104,126],[cx+14,126]],'#3f8a5a');
+      poly([[cx+12,138.5],[cx+106,138.5],[cx+98,127.5],[cx+20,127.5]],'#2f6fb0');
+      ctx.strokeStyle='#f4f6f8';ctx.lineWidth=0.6;ctx.beginPath();
+      ctx.moveTo(cx+12,138.5);ctx.lineTo(cx+106,138.5);ctx.lineTo(cx+98,127.5);ctx.lineTo(cx+20,127.5);ctx.closePath();
+      ctx.moveTo(cx+14,137.2);ctx.lineTo(cx+104,137.2);ctx.moveTo(cx+21,128.8);ctx.lineTo(cx+97,128.8);   // シングルスのライン
+      ctx.moveTo(cx+40,127.5);ctx.lineTo(cx+36,138.5);ctx.moveTo(cx+78,127.5);ctx.lineTo(cx+82,138.5);     // サービスライン
+      ctx.moveTo(cx+38,133);ctx.lineTo(cx+80,133);ctx.stroke();                                          // センターサービスライン
+      poly([[cx+58.4,124],[cx+59.6,124],[cx+59.6,139],[cx+58.4,139]],'#2a2a30');rect(cx+58,124,2,1,'#f4f6f8'); // ネット
+      rect(cx+58.5,122.5,1,2,'#2a2a30');
+    }
+    rect(X+30,131,1.5,1.5,'#e8f04a');rect(X+150,129,1.5,1.5,'#e8f04a');                                 // テニスボール
+    // クラブハウス（白い壁・赤茶の屋根・大きな窓）
+    const H=X+240;
+    rect(H,114,58,26,'#f4f1ea');rect(H+52,114,6,26,'#d9d4c8');
+    poly([[H-4,114],[H+62,114],[H+54,106],[H+4,106]],'#9a4a36');rect(H-4,114,66,1.2,'#6e3324');
+    rect(H+6,120,20,10,'#7fa6c8');rect(H+6,120,20,1.5,'#cfe2f0');rect(H+16,120,0.8,10,'#e8eef4');
+    rect(H+32,122,9,18,'#6b4a36');rect(H+33,123,7,16,'#7d5a42');rect(H+38,131,1,1.5,'#e8c060');           // 入口のドア
+    rect(H+44,120,6,8,'#7fa6c8');
+    // 大きな看板「メロンテニスクラブ」（メロンの網目もよう・メロンのマーク）
+    const S=X+74; // 看板はコートの真ん中の上（金網の上に立てる）
+    rect(S+6,94,1.5,8,'#7d8394');rect(S+76,94,1.5,8,'#7d8394');
+    rect(S,78,84,17,'#2f6b2a');rect(S+1,79,82,15,'#a8e070');
+    ctx.strokeStyle='rgba(120,180,80,.75)';ctx.lineWidth=0.4;ctx.beginPath();
+    for(let k=-16;k<84;k+=5){ctx.moveTo(S+1+k,79);ctx.lineTo(S+1+k+15,94);ctx.moveTo(S+1+k+15,79);ctx.lineTo(S+1+k,94);}
+    ctx.save();ctx.beginPath();ctx.rect(S+1,79,82,15);ctx.clip();ctx.stroke();ctx.restore();
+    ctx.fillStyle='#9cd46a';ctx.beginPath();ctx.arc(S+8,86.5,4.8,0,7);ctx.fill();                         // メロンのマーク
+    ctx.strokeStyle='#e8f4d8';ctx.lineWidth=0.4;ctx.beginPath();ctx.moveTo(S+4,84.5);ctx.lineTo(S+12,88.5);ctx.moveTo(S+4,88.5);ctx.lineTo(S+12,84.5);ctx.moveTo(S+8,82);ctx.lineTo(S+8,91);ctx.stroke();
+    rect(S+7.5,80.5,1,2,'#5a7a3a');rect(S+8.5,80.5,2,0.8,'#5a9a3a');
+    ctx.fillStyle='#1f4a1c';ctx.font='bold 7px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('メロンテニスクラブ',S+47,87);
+    // となりの家並み（ブロック塀・植木・ポスト）
+    const r=seeded(83);
+    for(let x=H+80;x<b+720-20;x+=46+r()*10){
+      const w=34+r()*6,h=20+r()*5,base=136;
+      const wall=['#f1ece2','#e6eaee','#f4e4d0'][(r()*3)|0],roof=['#4f5a6e','#7a4a3e','#5a5e52'][(r()*3)|0];
+      rect(x,base-h,w,h,wall);rect(x+w-4,base-h,4,h,shade(wall,-22));
+      poly([[x-3,base-h],[x+w+3,base-h],[x+w/2,base-h-10]],roof);rect(x-3,base-h,w+6,1,shade(roof,-25));
+      rect(x+5,base-h+5,7,6,'#8fb3cf');rect(x+5,base-h+5,7,1.2,'#cfe0ee');rect(x+w-14,base-h+5,7,6,'#8fb3cf');
+      rect(x+w/2-3,base-11,6,11,'#7d5a42');
+      ctx.fillStyle='#4f8a4a';ctx.beginPath();ctx.arc(x+w+5,base-6,6,0,7);ctx.fill();ctx.fillStyle='#62a05a';ctx.beginPath();ctx.arc(x+w+4,base-8,3.5,0,7);ctx.fill();
+    }
+    // 歩道側のブロック塀（テニスクラブの前は低い生け垣）
+    rect(X,136,232,4,'#4f8a4a');rect(X,136,232,1,'#6aaa5a');
+    for(let x=H-6;x<b+720;x+=12){rect(x,134,12,6,'#b8b8b2');rect(x,134,12,1,'#d4d4ce');rect(x+11,134,1,6,'#9a9a94');}
+    rect(H+70,128,4,6,'#c8202a');rect(H+71,127,2,1,'#e8484a');rect(H+71.5,134,1,6,'#7d8394');               // 赤いポスト
+  });
+  // 電柱と電線（手前）
+  tile(d*0.55,200,b=>{
+    const x=b+104;rect(x,78,2.2,62,'#9a9286');rect(x+1.6,78,0.6,62,'#7e776c');rect(x-6,84,14,1.5,'#7e776c');rect(x-4,90,10,1.2,'#7e776c');
+    rect(x-5,83,1.5,1.5,'#d8d8d8');rect(x+5.5,83,1.5,1.5,'#d8d8d8');rect(x+2.2,96,3,5,'#5a5a5e');               // がいしと変圧器
+    ctx.strokeStyle='rgba(40,40,48,.75)';ctx.lineWidth=0.4;
+    for(const [oy,sag] of [[84,8],[86,10],[90,7]]){ctx.beginPath();ctx.moveTo(x-200,oy);ctx.quadraticCurveTo(x-100,oy+sag,x,oy);ctx.quadraticCurveTo(x+100,oy+sag,x+200,oy);ctx.stroke();}
+  });
+  rect(0,140,320,3,'#a9aab2');rect(0,140,320,1,'#c9cad2');                                                 // 歩道の縁
+}
+const STAGE_DRAW=[
+ // 0 横浜：海・吊り橋・タワー・観覧車・赤レンガ・クレーン（朝）
+ (d)=>{
+  sky(['#3f8fd6','#8cc8ef','#e6f3f7']);
+  sunGlow(60,40,8,'#fffbe6','rgba(255,250,220,.55)');
+  cloudLayer(d*0.02,520,14,1.1,'#ffffff','#c9d9e8',3);cloudLayer(d*0.05,420,40,0.7,'rgba(255,255,255,.9)','rgba(190,210,230,.9)',8);
+  // 遠景：ビル群（かすんで青い）
+  skyline(d*0.08,600,41,118,18,46,['#a9bfd6','#b6c8dc','#9fb5cc'],0.0);
+  tile(d*0.12,640,b=>{
+    // 高層タワー（段々・窓の帯）
+    poly([[b+54,120],[b+86,120],[b+81,40],[b+59,40]],'#d5dce4');poly([[b+74,120],[b+86,120],[b+81,40],[b+75,40]],'#b7c1cc');
+    rect(b+61,34,18,6,'#c3ccd6');rect(b+65,28,10,6,'#b0bac6');rect(b+69.5,20,1,8,'#9aa3b0');
+    for(let y=44;y<118;y+=3)rect(b+59+(120-y)*0.02,y,20-(120-y)*0.04,1,'rgba(80,110,150,.45)');
+    // 観覧車（輪・スポーク・ゴンドラ）
+    ctx.strokeStyle='#eef2f7';ctx.lineWidth=1.4;ctx.beginPath();ctx.arc(b+140,88,25,0,7);ctx.stroke();
+    ctx.lineWidth=0.6;ctx.beginPath();ctx.arc(b+140,88,21,0,7);ctx.stroke();
+    const rot=d*0.002;for(let i=0;i<16;i++){const a=rot+i*Math.PI/8;ctx.beginPath();ctx.moveTo(b+140,88);ctx.lineTo(b+140+Math.cos(a)*25,88+Math.sin(a)*25);ctx.stroke();
+      ctx.fillStyle=['#ff7b7b','#ffd93d','#6bc4ff','#7dff8a'][i%4];ctx.fillRect(b+138.5+Math.cos(a)*25,88.5+Math.sin(a)*25,3,3);}
+    rect(b+138,86,4,4,'#d9dde6');
+    poly([[b+130,122],[b+134,122],[b+141,90],[b+139,90]],'#c9d0d8');poly([[b+146,122],[b+150,122],[b+141,90],[b+139,90]],'#aeb6c0');
+    // 吊り橋（主塔・ケーブル・トラスの橋げた）
+    rect(b+240,102,290,3,'#e8ecf2');rect(b+240,105,290,2,'#a7b0bd');
+    for(let x=b+240;x<b+530;x+=6)rect(x,105,1,2,'#8a94a3');
+    for(const tx of [330,450]){rect(b+tx,56,3,50,'#f2f5f9');rect(b+tx+10,56,3,50,'#f2f5f9');rect(b+tx+2,56,1,50,'#c9d0da');rect(b+tx+12,56,1,50,'#c9d0da');
+      rect(b+tx,62,13,2,'#f2f5f9');rect(b+tx,80,13,2,'#f2f5f9');rect(b+tx,96,13,2,'#f2f5f9');}
+    ctx.strokeStyle='rgba(235,240,248,.95)';ctx.lineWidth=0.5;
+    for(let i=0;i<12;i++){[[336,252+i*7],[336,342+i*9],[456,398+i*5],[456,462+i*6]].forEach(([tx,ex])=>{ctx.beginPath();ctx.moveTo(b+tx,57);ctx.lineTo(b+ex,102);ctx.stroke();});}
+    // ガントリークレーン
+    for(const cx of [560,604]){rect(b+cx,76,2,44,'#e2493c');rect(b+cx+14,76,2,44,'#e2493c');rect(b+cx-12,76,44,3,'#f2f2f2');rect(b+cx-12,79,44,1,'#b9bec9');
+      rect(b+cx-10,79,4,5,'#e2493c');ctx.strokeStyle='#c43a2e';ctx.lineWidth=0.6;ctx.beginPath();ctx.moveTo(b+cx,90);ctx.lineTo(b+cx+16,110);ctx.moveTo(b+cx+16,90);ctx.lineTo(b+cx,110);ctx.stroke();}
+  });
+  // 海（地平線ほど明るく、さざ波）
+  const sea=ctx.createLinearGradient(0,106,0,135);sea.addColorStop(0,'#7fb6dc');sea.addColorStop(0.3,'#3d86c2');sea.addColorStop(1,'#1f5a92');
+  ctx.fillStyle=sea;ctx.fillRect(-4,106,328,29);
+  tile(d*0.3,64,b=>{ctx.fillStyle='rgba(255,255,255,.55)';ctx.fillRect(b+6,111,8,1);ctx.fillRect(b+30,116,12,1);ctx.fillStyle='rgba(255,255,255,.35)';ctx.fillRect(b+48,124,14,1);ctx.fillRect(b+18,130,10,1);});
+  ctx.fillStyle='rgba(255,250,220,.4)';tile(d*0.3,40,b=>ctx.fillRect(b+((G.time/10|0)%5)*3,108,2,1));
+  tile(d*0.4,520,b=>{
+    // 赤レンガ倉庫（屋根・アーチ窓・陰）
+    rect(b+40,117,72,18,'#b5523b');rect(b+40,115,72,2,'#7a3324');rect(b+100,117,12,18,'#93412e');
+    for(let y=120;y<135;y+=3)rect(b+40,y,60,1,'rgba(0,0,0,.08)');
+    for(let x=b+44;x<b+98;x+=7){rect(x,121,3,6,'#f2d8a8');rect(x,121,3,1,'#c9a878');rect(x,128,3,5,'#3a2a24');}
+    // 客船（船体の塗り分け・舷窓・デッキの窓と手すり・救命ボート・煙突・マスト・水面の映り込み）
+    { const X=b+232;
+      poly([[X+2,121],[X+96,121],[X+110,118],[X+104,130],[X+98,135],[X+8,135],[X+3,130]],'#f7f7f8');
+      poly([[X+3,130],[X+104,130],[X+98,135],[X+8,135]],'#1f2d58');rect(X+3,129,101,1.2,'#b8303a');
+      rect(X+2,121,94,1,'#d9dde4');for(let x=X+6;x<X+98;x+=3.5)rect(x,125,1.5,1.5,'#4a5f7e');
+      rect(X+101,125,2,1.5,'#2a2a30');
+      rect(X+10,113,84,8,'#f4f5f7');rect(X+10,115,84,3,'#6f8fb2');for(let x=X+12;x<X+94;x+=4)rect(x,115,0.6,3,'#e8ecf2');
+      rect(X+10,113,84,0.6,'#9aa3b0');rect(X+88,113,6,8,'#dfe3ea');
+      rect(X+16,107,72,6,'#f4f5f7');rect(X+16,108.5,72,2.5,'#6f8fb2');for(let x=X+18;x<X+88;x+=4)rect(x,108.5,0.6,2.5,'#e8ecf2');rect(X+16,107,72,0.6,'#9aa3b0');
+      rect(X+24,102,56,5,'#f4f5f7');rect(X+24,103.5,56,2,'#7d9cbe');rect(X+24,102,56,0.6,'#9aa3b0');
+      rect(X+66,97,18,5,'#f4f5f7');rect(X+68,98.5,15,2,'#24324a');rect(X+84,98,3,1,'#f4f5f7');
+      for(let x=X+20;x<X+80;x+=11){rect(x,111,7,2.4,'#f07a24');rect(x,110.6,7,0.8,'#fbd3b0');rect(x+1,113,0.6,1,'#8a8e96');rect(x+5.4,113,0.6,1,'#8a8e96');}
+      poly([[X+40,102],[X+52,102],[X+50,90],[X+42,90]],'#f7f7f8');rect(X+42.5,94,7,2.4,'#1f4fc4');rect(X+42,90,8,2,'#2a2a30');
+      rect(X+74,88,1,9,'#9aa3b0');rect(X+71,90,7,0.8,'#9aa3b0');rect(X+72,87,5,1,'#c9ccd4');
+      ctx.fillStyle='rgba(255,255,255,.35)';ctx.fillRect(X+10,134.4,86,0.8);ctx.fillStyle='rgba(255,255,255,.6)';ctx.fillRect(X+100,132,8,1);ctx.fillRect(X+104,133.5,6,0.8);
+    }
+  });
+  haze(96,135,'rgba(220,235,245,.35)');
+  streetLights(d*0.9);guardrail(d*0.9);
+ },
+ // 1 東京：スカイツリー・東京タワー・高層ビル群・首都高（昼）
+ (d)=>{
+  sky(['#3a86d0','#8fc6ee','#dcecf6']);
+  cloudLayer(d*0.02,560,12,1.2,'#ffffff','#c5d4e4',11);cloudLayer(d*0.05,400,36,0.8,'rgba(255,255,255,.9)','rgba(185,205,225,.9)',19);
+  tile(d*0.06,760,b=>{
+    // 細いタワー（トラスの陰影・展望台）
+    poly([[b+112,132],[b+130,132],[b+123.5,24],[b+118.5,24]],'#e3eaf2');poly([[b+121,132],[b+130,132],[b+123.5,24],[b+121,24]],'#c4cfdc');
+    for(let y=30;y<130;y+=5){const hw=2.5+(y-24)*0.08;ctx.strokeStyle='rgba(150,165,185,.6)';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(b+121-hw,y);ctx.lineTo(b+121+hw,y+5);ctx.stroke();}
+    rect(b+113,60,16,5,'#cdd8e4');rect(b+113,62,16,1,'#8fa6c0');rect(b+116,42,10,3,'#cdd8e4');rect(b+120.5,4,1,20,'#b9c6d6');
+    // 赤いタワー（格子・白い帯・展望台）
+    poly([[b+458,132],[b+492,132],[b+476,38],[b+474,38]],'#e8442c');
+    ctx.strokeStyle='rgba(120,20,10,.5)';ctx.lineWidth=0.5;
+    for(let y=44;y<130;y+=6){const hw=(y-38)*0.18;ctx.beginPath();ctx.moveTo(b+475-hw,y);ctx.lineTo(b+475+hw,y+6);ctx.moveTo(b+475+hw,y);ctx.lineTo(b+475-hw,y+6);ctx.stroke();}
+    for(const y of [62,86,108])rect(b+475-(y-38)*0.18,y,(y-38)*0.36,2,'#f4f4f4');
+    rect(b+467,78,16,5,'#f4f4f4');rect(b+467,80,16,1,'#9aa3b0');rect(b+474.5,24,1,14,'#e8442c');
+  });
+  skyline(d*0.14,640,21,128,40,92,['#9fb2c9','#aebfd3','#93a8c1'],0.0);   // 遠く・かすむ
+  haze(70,130,'rgba(210,228,242,.45)');
+  skyline(d*0.24,600,33,134,28,78,['#6f84a6','#7d90b0','#5f7499','#8a9cba'],0.08);
+  skyline(d*0.34,520,57,137,14,44,['#4e5d82','#56668c','#465475'],0.12);
+  // 首都高（遮音壁・橋脚の陰・標識）
+  tile(d*0.5,400,b=>{
+    rect(b,104,400,4,'#c9ced8');for(let x=b;x<b+400;x+=8)rect(x,104,1,4,'#a4aab6');
+    rect(b,108,400,5,'#9aa0ab');rect(b,113,400,2,'#6a707c');
+    for(let x=14;x<400;x+=64){rect(b+x,115,8,21,'#8d939f');rect(b+x+6,115,2,21,'#6f7581');rect(b+x-2,114,12,2,'#7a808c');}
+    rect(b+200,92,40,12,'#2b8a55');rect(b+200,92,40,1,'#5fc08a');rect(b+218,104,2,4,'#7a808c');
+    ctx.fillStyle='#fff';ctx.font='bold 7px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('首都高',b+220,98.5);
+  });
+  streetLights(d*0.9);guardrail(d*0.9);
+ },
+ // 2 埼玉：遠くの山・田んぼ・住宅・鉄塔・ショッピングモール（午後）
+ (d)=>{
+  sky(['#e99a52','#f6c98e','#fff0d6']);
+  sunGlow(70,58,11,'#fff6d2','rgba(255,240,200,.55)');
+  cloudLayer(d*0.02,520,18,1.0,'rgba(255,246,232,.95)','rgba(230,185,150,.9)',23);
+  // 遠くの山並み（2段のかすみ）
+  tile(d*0.05,700,b=>{poly([[b,118],[b+70,92],[b+130,100],[b+210,84],[b+300,98],[b+390,88],[b+480,104],[b+560,90],[b+700,118]],'#a9a6b8');});
+  tile(d*0.09,640,b=>{poly([[b,122],[b+90,100],[b+190,112],[b+300,96],[b+420,110],[b+540,100],[b+640,122]],'#8f9c8e');});
+  haze(88,124,'rgba(255,230,200,.35)');
+  // 鉄塔と電線（たるみ）
+  tile(d*0.18,200,b=>{
+    const x=b+100;pylon(x,128,56);
+    ctx.strokeStyle='rgba(60,60,70,.55)';ctx.lineWidth=0.5;
+    for(const yy of [78,85]){ctx.beginPath();ctx.moveTo(x-9,yy);ctx.quadraticCurveTo(x-109,yy+12,x-209,yy);ctx.moveTo(x+9,yy);ctx.quadraticCurveTo(x+109,yy+12,x+209,yy);ctx.stroke();}
+  });
+  // 田んぼ（あぜ道の筋・色むら）
+  rect(0,121,320,14,'#8dbb4a');
+  tile(d*0.4,48,b=>{rect(b,121,24,14,'#97c455');rect(b+24,121,1,14,'#b9a36a');rect(b+47,121,1,14,'#b9a36a');});
+  rect(0,121,320,1,'#a6c96a');
+  // 住宅（屋根の陰・窓・塀）・木・モール
+  tile(d*0.4,480,b=>{
+    const r=seeded(77);
+    for(let i=0;i<7;i++){const x=b+i*34+(r()*8|0),w=20+(r()*8|0),h=12+(r()*6|0),rc=['#8a3b2e','#3b4f6b','#5a5a62','#2e5a3e'][(r()*4)|0];
+      const wall=['#f2ece0','#e8e0cc','#dfe6ea'][(r()*3)|0];
+      rect(x,128-h,w,h,wall);rect(x+w-4,128-h,4,h,shade(wall,-25));
+      poly([[x-2,128-h],[x+w+2,128-h],[x+w/2,128-h-8]],rc);poly([[x+w/2,128-h-8],[x+w+2,128-h],[x+w/2,128-h]],shade(rc,-25));
+      rect(x+3,128-h+4,5,4,'#8fb7d6');rect(x+3,128-h+4,5,1,'#cfe3f2');rect(x+w-10,128-h+5,3,7,'#7a5a3e');
+      rect(x-1,126,w+2,2,'#c9c2b2');}
+    rect(b+268,98,152,30,'#ebe6dc');rect(b+268,96,152,3,'#c95b3c');rect(b+410,98,10,30,'#cfc8bb');
+    rect(b+318,103,52,9,'#c95b3c');ctx.fillStyle='#fff';ctx.font='bold 7px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('MALL',b+344,108);
+    for(let x=b+274;x<b+408;x+=10){rect(x,116,7,9,'#8fb7d6');rect(x,116,7,1,'#d6e8f4');}
+  });
+  trees(d*0.45,360,129,'#4f8a3c',61,0.6);
+  streetLights(d*0.9);guardrail(d*0.9);
+ },
+ // 3 群馬 太田：赤城山・金山・スバルの工場・夕焼け
+ (d)=>{
+  sky(['#ff9a5c','#e0708a','#4a3478']);
+  sunGlow(250,74,15,'#ffe2a0','rgba(255,190,120,.6)');
+  ctx.fillStyle='rgba(230,110,140,.55)';for(let i=0;i<4;i++)ctx.fillRect(226,70+i*5,48,1+i*0.6);
+  cloudLayer(d*0.02,600,22,1.1,'rgba(255,200,170,.9)','rgba(150,80,120,.85)',29);
+  // 赤城山（すそ野・尾根の陰・2段）
+  tile(d*0.04,900,b=>{
+    poly([[b,124],[b+120,90],[b+190,58],[b+215,50],[b+232,60],[b+250,52],[b+270,64],[b+330,82],[b+470,108],[b+560,124]],'#5a4a88');
+    poly([[b+215,50],[b+232,60],[b+250,52],[b+270,64],[b+330,82],[b+470,108],[b+560,124],[b+300,124],[b+240,80]],'#47396e');
+    ctx.strokeStyle='rgba(30,20,60,.35)';ctx.lineWidth=0.6;
+    for(const [x0,y0,x1,y1] of [[200,56,150,100],[232,60,230,110],[260,58,320,104],[180,66,110,110]]){ctx.beginPath();ctx.moveTo(b+x0,y0);ctx.lineTo(b+x1,y1);ctx.stroke();}
+    poly([[b+600,124],[b+680,104],[b+740,96],[b+820,110],[b+900,124]],'#5a4a88');
+  });
+  haze(80,124,'rgba(255,170,150,.3)');
+  // 金山（木々の質感）＋山頂の金山城跡の石垣と神社の鳥居
+  tile(d*0.15,700,b=>{ctx.fillStyle='#2c4a3e';ctx.beginPath();ctx.ellipse(b+200,124,72,27,0,Math.PI,0);ctx.fill();
+    const r=seeded(91);for(let i=0;i<40;i++){const a=Math.PI+r()*Math.PI,rr=r()*0.95;const x=b+200+Math.cos(a)*72*rr,y=124+Math.sin(a)*27*rr;
+      ctx.fillStyle=r()<0.5?'#365a4a':'#24403a';ctx.beginPath();ctx.arc(x,y,3+r()*3,0,7);ctx.fill();}
+    rect(b+184,100,32,3,'#8f8a86');rect(b+188,97,24,3,'#a29c97');rect(b+192,94.5,16,2.5,'#b3ada7');
+    for(let x=b+185;x<b+215;x+=3)rect(x,100,1,3,'#6f6a66');
+    rect(b+197,88,1,6.5,'#d23a2a');rect(b+203,88,1,6.5,'#d23a2a');rect(b+195.5,88,9,1,'#d23a2a');rect(b+196.5,90,7,0.8,'#d23a2a');
+    ctx.fillStyle='#fff';ctx.font='bold 6px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('金山',b+200,82);
+  });
+  // 太田市役所（高い庁舎・展望フロア）
+  tile(d*0.26,700,b=>{
+    bldg(b+40,122,26,64,'#e6e2da',901,0.1);rect(b+38,56,30,5,'#cfd6de');rect(b+38,57,30,2,'#5f84a8');rect(b+51,50,1,6,'#9aa3b0');
+    rect(b+41,62,24,6,'#1f4fc4');ctx.fillStyle='#fff';ctx.font='bold 5px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('太田市役所',b+53,65);
+    bldg(b+72,122,18,30,'#c9c4bb',902,0.1);bldg(b+94,122,14,22,'#b9b4ab',903,0.1);
+  });
+  // 太田駅（高架・駅舎・走る電車）
+  tile(d*0.32,760,b=>{
+    rect(b,108,760,4,'#b9bec8');rect(b,112,760,1.5,'#8d939f');for(let x=10;x<760;x+=46){rect(b+x,113,5,12,'#a4aab6');rect(b+x+4,113,1,12,'#80868f');}
+    rect(b+300,96,90,12,'#eef0f3');rect(b+300,94,90,2,'#9aa3b0');for(let x=b+304;x<b+386;x+=6)rect(x,98,4,6,'#7fa6c8');
+    rect(b+325,86,40,8,'#1f4fc4');ctx.fillStyle='#fff';ctx.font='bold 7px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('太田駅',b+345,90.5);
+    const tx=b+((G.time*0.25)%760)-120;
+    for(let k=0;k<4;k++){const x=tx+k*31;rect(x,101,30,7,'#f2f3f5');rect(x,103,30,2,'#33415e');rect(x,106,30,1,'#e2493c');rect(x+29,101,1,7,'#b9bec8');}
+  });
+  // 畑
+  rect(0,122,320,13,'#6f8a3a');tile(d*0.4,40,b=>{rect(b,122,20,13,'#7a963f');rect(b+20,122,1,13,'#8c7a4a');});
+  // スバルの工場（のこぎり屋根の陰・煙突の煙・窓・看板）
+  tile(d*0.4,640,b=>{
+    rect(b+40,104,232,31,'#dfe2e8');rect(b+40,104,232,1,'#f4f5f8');rect(b+262,104,10,31,'#c3c7cf');
+    for(let x=b+40;x<b+272;x+=14){poly([[x,104],[x+14,104],[x+14,96]],'#c2c7cf');poly([[x+11,98],[x+14,96],[x+14,104],[x+11,104]],'#9aa9c4');}
+    for(const cx of [244,256]){rect(b+cx,70,7,34,'#b3b7bf');rect(b+cx+5,70,2,34,'#8d929b');rect(b+cx,68,7,3,'#e2493c');rect(b+cx,80,7,2,'#e2493c');
+      for(let k=0;k<4;k++){const t=((G.time/3+k*20+cx)%80)/80;ctx.fillStyle='rgba(235,230,240,'+(0.5*(1-t))+')';ctx.beginPath();ctx.arc(b+cx+3+t*14,66-t*26,3+t*6,0,7);ctx.fill();}}
+    rect(b+100,108,80,16,'#1f4fc4');rect(b+100,108,80,1,'#5f86ff');
+    ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 9px sans-serif';ctx.fillText('SUBARU',b+140,114);
+    ctx.font='bold 5px sans-serif';ctx.fillText('群馬製作所',b+140,121);
+    for(let x=b+48;x<b+96;x+=8){rect(x,114,5,6,'#f6e2a8');rect(x,114,5,1,'#fff4cf');}for(let x=b+188;x<b+246;x+=8){rect(x,114,5,6,'#f6e2a8');rect(x,114,5,1,'#fff4cf');}
+    rect(b+330,118,60,17,'#e9e4da');rect(b+382,118,8,17,'#cfc8bb');poly([[b+326,118],[b+394,118],[b+360,108]],'#8a3b2e');poly([[b+360,108],[b+394,118],[b+360,118]],'#6e2e24');
+    rect(b+338,122,6,5,'#f6e2a8');rect(b+352,122,6,5,'#f6e2a8');
+    // 大きな看板「スバルのまち 太田」
+    rect(b+452,92,2,32,'#7d8394');rect(b+500,92,2,32,'#7d8394');rect(b+440,84,74,14,'#1f4fc4');rect(b+440,84,74,1,'#5f86ff');rect(b+440,97,74,1,'#14327a');
+    ctx.fillStyle='#fff';ctx.font='bold 8px sans-serif';ctx.fillText('スバルのまち 太田',b+477,91.5);
+  });
+  trees(d*0.45,420,128,'#3f6a3a',73,0.5);
+  // 工場の前の出荷ヤード：新車がずらりと並ぶ
+  tile(d*0.4,640,b=>{
+    rect(b+60,128,200,7,'#8f949e');rect(b+60,128,200,0.8,'#b9bec8');
+    const cols=['#1f4fc4','#f2f2f2','#2a2a2e','#b9bec6','#c8202a','#1f4fc4','#4f73a0'];
+    for(let i=0;i<24;i++){const x=b+64+i*8,c=cols[i%cols.length];rect(x,130,6.5,3,c);rect(x+1.5,128.8,3.5,1.4,c);rect(x+2,129,2.5,1,'#33496b');rect(x+1,133,1.2,1.2,'#16161a');rect(x+4.6,133,1.2,1.2,'#16161a');}
+  });
+  // 道路標識「太田市」
+  tile(d*0.9,520,b=>{const x=b+200;rect(x,104,1.5,32,'#9aa0ab');rect(x+12,104,1.5,32,'#9aa0ab');rect(x-6,96,26,11,'#1f5fbf');rect(x-5,97,24,9,'#2a6fd0');
+    ctx.fillStyle='#fff';ctx.font='bold 6px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('太田市',x+7,100);ctx.font='bold 3.5px sans-serif';ctx.fillText('Ota City',x+7,104.3);});
+  streetLights(d*0.9);guardrail(d*0.9);
+ },
+];
+const STAGES=[{name:'横浜',start:0},{name:'東京',start:9000},{name:'埼玉',start:19000},{name:'群馬 太田',start:29000}];
+const GOAL=38000, FADE=1400, TOTAL_KM=120;
+function stageAt(d){let i=0;for(let k=0;k<STAGES.length;k++)if(d>=STAGES[k].start)i=k;return i;}
+function drawBG(dist){
+  const d=dist/BG;
+  ctx.save();ctx.scale(BG,BG);
+  const ret=(G.lap||1)>=2, pos=ret?GOAL-dist:dist;  // 帰り道は太田→横浜の逆順
+  const i=stageAt(pos);
+  STAGE_DRAW[i](d);
+  if(ret){const cur=STAGES[i];if(i>0&&pos<cur.start+FADE){ctx.globalAlpha=(cur.start+FADE-pos)/FADE;STAGE_DRAW[i-1](d);ctx.globalAlpha=1;}}
+  else{const nx=STAGES[i+1];if(nx && dist>nx.start-FADE){ctx.globalAlpha=(dist-(nx.start-FADE))/FADE;STAGE_DRAW[i+1](d);ctx.globalAlpha=1;}}
+  // 行きのスタート：メロンテニスクラブの住宅街から、走り出すと横浜へ切り替わる
+  if(!ret&&G.mode!=='title'&&dist<HOME_END){ctx.globalAlpha=Math.max(0,Math.min(1,(HOME_END-dist)/HOME_FADE));drawHome(d);ctx.globalAlpha=1;}
+  if(ret&&G.mode!=='title'&&pos<CITY_START){ctx.globalAlpha=Math.max(0,Math.min(1,(CITY_START-pos)/CITY_FADE));drawEditCity(d);ctx.globalAlpha=1;}
+  road(d); // 道路（共通）
+  ctx.restore();
+}
+
+// ---------- 三角コーン ----------
+function renderCone(){
+  const c=document.createElement('canvas');c.width=16;c.height=20;const g=c.getContext('2d');const pal=new Set([OUTLINE]);
+  const F=col=>{pal.add(col);g.fillStyle=col;};
+  F('#c94e12');g.fillRect(1,16,14,3);
+  path(g,pts('4,16 12,16 9.2,2 6.8,2'));F('#ff7a1a');g.fill();
+  g.save();path(g,pts('4,16 12,16 9.2,2 6.8,2'));g.clip();F('#f4f4f4');g.fillRect(0,6,16,2.5);g.fillRect(0,11,16,2.5);F('#ffa060');g.fillRect(6,2,1,14);g.restore();
+  pixelize(c,pal);return c;
+}
+const CONE=renderCone();
+
+// ---------- ゲーム ----------
+let best=0;try{best=+localStorage.getItem('imocchi_best')||0;}catch(e){}
+let bestTime=0;try{bestTime=+localStorage.getItem('gogoimo_besttime')||0;}catch(e){}
+const DAWN=3*60*60; // 朝になるまで：3分
+const fmtTime=f=>{const s=f/60;return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}.${Math.floor((s*10)%10)}`;};
+const G={mode:'title'};
+function reset(){
+  Object.assign(G,{time:0,speed:2.1,dist:0,score:0,combo:0,hp:5,cars:[],cones:[],items:[],fx:[],texts:[],spawnT:70,coneT:240,itemT:600,mechaT:rnd(1200,1800),water:WATER_MAX,waterT:rnd(420,600),shake:0,overT:0,
+    stage:0,banner:{s:'STAGE 1　横浜 出発！',t:0},gate:null,jamOn:false,jamDone:false,
+    p:{x:80,y:GROUND-FOOT,vx:0,vy:0,on:true,jumps:0,face:0,inv:0,anim:0,hurtT:0}});
+}
+reset();
+function startIfIdle(){
+  if(G.mode==='title'){reset();G.lap=1;startIntro();}
+  else if(G.mode==='over' && G.overT>50){reset();G.lap=1;startIntro();}
+  else if(G.mode==='clear' && G.overT>50){
+    if((G.lap||1)>=2){reset();G.lap=1;G.mode='title';return;}       // 帰り道クリア→タイトルへ
+    const sc=G.score;reset();G.lap=2;G.score=sc;G.stage=3;G.rt=0;     // 帰り道（太田→横浜）タイムアタック
+    startIntro(null,true);
+  }
+}
+function startIntro(msg,ret){ // スタート前のひとこと
+  G.mode='intro';G.introT=0;G.introRet=!!ret;rankStart(!!ret);
+  if(ret){ // 帰り道：BGMなしで電話がかかってくる
+    bgmStop();G.say={s:'はい〜もしもし',t:0};G.introEnd=330;G.hopAt=150;snd('ring');
+  }else{
+    bgmStop();G.say={s:'はい、もしもし～',t:0};G.introEnd=280;G.hopAt=150;snd('ring');           // 電話がかかってくる（BGMは「取材忘れてた！」から）
+  }
+}
+function addText(x,y,s,col){G.texts.push({x,y,s,col,t:0});}
+function burst(x,y,col,n=10){for(let i=0;i<n;i++)G.fx.push({x,y,vx:rnd(-2.4,2.4),vy:rnd(-3.6,-0.6),t:0,col});}
+const SUBARU_RATE=[0.25,0.15,0.35,0.45]; // 横浜・東京（少なめ）・埼玉・太田（埼玉・太田は易しめに調整）
+function spawnCar(){
+  const LP=(G.lap||1)-1;
+  let subaru=Math.random()<SUBARU_RATE[G.stage]+G.time/3600*0.03+LP*0.08;
+  // 直前のスバル車とくっつかないように：近ければスバル以外にする
+  const last=G.cars.filter(c=>c.state==='run'&&c.subaru).sort((a,b)=>b.x-a.x)[0];
+  if(subaru&&last&&W+10-(last.x+last.w)<subGap(last))subaru=false;
+  let m,color;
+  // BRZは東京から、WRX（STI・22B）は埼玉から登場
+  const MIN_STAGE={brz:1,sti:2,'22b':2};
+  if(subaru){m=pick(SUBARU_MODELS.filter(x=>LP>0||(MIN_STAGE[x.id]||0)<=G.stage));color=m.color;}else{m=pick(OTHER_MODELS);color=pick(OTHER_COLORS);}
+  const spr=getCar(m,color);
+  let v=subaru?rnd(1.1,2.0):rnd(0.3,1.7); // 遅すぎるスバル車は1回のジャンプで越えられないので、下限を上げる
+  if(m.id==='truck'||m.id==='minivan'||m.id==='sambar'||m.id==='s360') v*=0.55;
+  if(m.id==='sports') v+=0.6;
+  if(m.id==='brz') v+=1.1;                     // BRZは速い
+  if(m.id==='sti'||m.id==='22b') v+=1.7;       // WRXはもっと速い
+  if(subaru) v+=LP*1.0;                        // 2周目以降はスバル車がさらに速い
+  G.cars.push({x:W+10,m,color,spr,subaru,v,state:'run',t:0,w:m.w+PAD*2,h:m.h+PAD*2});
+}
+// スバル車どうしの最低の車間：着地してもう一度跳べるだけのすき間（速いほど広く）
+function subGap(c){return 60+12*(G.speed+(c?c.v:1));}
+const JAM_FROM=12400, JAM_TO=14600;
+function spawnJamCar(x){ // 渋滞の車：みんなほぼ同じ速さでのろのろ
+  const subaru=false; // 渋滞ゾーンにはスバル車を出さない
+  const m=subaru?pick(SUBARU_MODELS.filter(x=>x.id!=='sti'&&x.id!=='22b')):pick(OTHER_MODELS.filter(x=>x.id!=='truck'));
+  const color=subaru?m.color:pick(OTHER_COLORS);
+  G.cars.push({x,m,color,spr:getCar(m,color),subaru,v:0.15,state:'run',t:0,w:m.w+PAD*2,h:m.h+PAD*2,lane:0,jam:true});
+}
+function hurt(p,msg){
+  if(p.inv>0) return;
+  if((G.lap||1)>=2){ // 帰り道：ライフは減らないが倒れてストップ
+    p.down=80;p.inv=150;p.kb=true;p.vx=-3.2;p.vy=Math.min(p.vy,-5);p.on=false;G.combo=0;G.shake=8;snd('hurt');if(msg)addText(p.x+23,p.y-6,msg,'#ff6b6b');
+    if(Math.random()<0.5)G.say={s:'ｳﾜｰ!!!',t:0};return;
+  }
+  G.hp--;p.inv=90;p.hurtT=24;G.combo=0;G.shake=10;snd('hurt');
+  if(msg) addText(p.x+23,p.y-6,msg,'#ff6b6b');
+  if(G.hp<=0){G.mode='over';G.overT=0;bgmStop();snd('over');saveBest();submitRank('score',G.score);}
+}
+function saveBest(){if(G.score>best){best=G.score;try{localStorage.setItem('imocchi_best',best);}catch(e){}}}
+function surface(c,x0,x1){
+  const a=Math.max(Math.ceil(x0),Math.ceil(c.x)),b=Math.min(Math.floor(x1),Math.floor(c.x+c.w-1));
+  if(a>b) return null;
+  let s=Infinity;const y0=GROUND-c.h+PAD+Math.round(c.ly||0);
+  for(let x=a;x<=b;x++){const t=c.spr.top[x-Math.floor(c.x)];if(t!==undefined&&t<Infinity)s=Math.min(s,y0+t);}
+  return s===Infinity?null:s;
+}
+const SUBARU_MSG=n=>pick(['スバル愛が痛む…',`ゴメンよ${n}・・・`,'六連星に足が…']);
+function blowCar(c,dir){ // メカモードで車を吹き飛ばす
+  c.state='fly';c.vx=dir*rnd(5,8);c.vy=-rnd(7,10);c.fy=0;c.rot=0;c.vr=dir*rnd(0.08,0.16);
+  G.score+=200;G.shake=8;snd('blow');burst(c.x+c.w/2,GROUND-c.h/2,'#ffd23f',16);burst(c.x+c.w/2,GROUND-c.h/2,c.color,12);
+  addText(c.x+c.w/2,GROUND-c.h-14,'ドカーン！ +200','#ffd23f');
+}
+function knockCone(k,dir){k.fly=true;k.vx=dir*rnd(2,4);k.vy=rnd(-5,-3);k.rot=0;k.vr=rnd(-0.4,0.4);}
+function update(){
+  G.time++;
+  if(G.mode==='intro'){
+    G.introT++;if(G.say)G.say.t=Math.min(G.say.t,10);
+    const t=G.introT,h=G.hopAt||8;G.p.y=GROUND-FOOT-(t>h&&t<h+18?Math.sin((t-h)/18*Math.PI)*14:0); // びくっと跳ねる
+    if(t===60){G.p.face=0;}
+    if(G.introRet){ // 電話の流れ
+      if(t===80)G.say={s:'……',t:0};
+      if(t===150){G.say={s:'締切明日なのぉ！？',t:0};snd('honk');}
+      if(t===235){G.say=null;G.banner={s:'原稿を朝までに持って帰れ！',t:0,col:'#ff9a9a'};G.bannerQ=[];snd('stage');}
+      if(G.banner)G.banner.t=Math.min(G.banner.t+1,60);
+    }else{ // 行き：電話の流れ
+      if(t===80)G.say={s:'・・・・・・・・・・',t:0};
+      if(t===150){G.say={s:'あ！やべ！取材忘れてた！',t:0};snd('honk');bgmStart(G.stage||0);}
+    }
+    if(t>=(G.introEnd||130)){G.mode='play';G.say=null;snd('jump');
+      if(G.introRet){bgmStart(G.stage);G.banner={s:'タイムアタック スタート！',t:0,col:'#7dff8a'};G.bannerQ=[];}
+      else{G.banner={s:'夕暮れまでに太田へたどり着け！',t:0,col:'#ffd27a'};G.bannerQ=['STAGE 1　横浜 出発！'];}}
+    return;
+  }
+  if(G.mode!=='play'){ if(G.mode!=='title')G.overT++; else G.dist=(G.dist+1.5)%GOAL; return; }
+  const p=G.p;
+  const LP=(G.lap||1)-1; // 2周目以降は全体を速く
+  G.speed=Math.min(LP>0?4.8+LP*0.6:4.4,2.1+LP*0.6+G.time/3600*1.35); // 最高速を少し下げた（行きだけ。埼玉・太田は常に最高速なので易しくなる。帰り道のタイムアタックは元のまま）
+  if(LP>0){G.rt=(G.rt||0)+1;                      // 帰り道のタイム
+    if(G.rt%1800===0&&!(p.down>0))G.say={s:pick(['今日は徹夜ですよぉ','マジヤバイ','いそげいそげ']),t:0};}
+  if(p.mecha>0)G.speed*=1.5;                       // ザクいもっち中は1.5倍の速さで走る
+  if(p.down>0){p.down--;G.speed=0;}                // 倒れている間は進まない
+  G.dist+=G.speed;
+  const ROUTE=LP>0?GOAL-G.dist:G.dist;
+  const st=stageAt(ROUTE);
+  if(st!==G.stage){G.stage=st;bgmSet(st);snd('stage');G.banner={s:LP>0?`${STAGES[st].name}${st===0?'（ゴール）':''}`:`STAGE ${st+1}　${STAGES[st].name}${st===3?'（ゴール）':''}`,t:0};}
+  G.banner.t++;
+  if(G.banner.t>=150&&G.bannerQ&&G.bannerQ.length)G.banner={s:G.bannerQ.shift(),t:0};
+  const acc=0.5,max=3.3;
+  if(p.hurtT>0)p.hurtT--;
+  if(p.kb){p.vx*=0.97;} else if(key.left){p.vx-=acc;p.face=1;} else if(key.right){p.vx+=acc;p.face=0;} else p.vx*=0.75;
+  if(!p.kb)p.vx=Math.max(-max,Math.min(max,p.vx));
+  if(p.down>0){if(!p.kb)p.vx=0;else if(p.down<80-6)p.down=Math.max(p.down,40);jumpPressed=false;}
+  if(jumpPressed){
+    if(p.on){p.vy=-9.0;p.on=false;p.jumps=1;snd('jump');}
+    else if(p.jumps<2&&G.water<WATER_JUMP){p.jumps=2;G.say={s:'もぉ～のど乾いた～',t:0};snd('dry');}
+    else if(p.jumps<2){G.water-=WATER_JUMP;if(G.water<WATER_JUMP)G.say={s:'もぉ～のど乾いた～',t:0};p.vy=-7.8;p.jumps=2;snd('jump2');for(let i=0;i<6;i++)G.fx.push({x:p.x+22,y:p.y+FOOT,vx:rnd(-1.5,1.5),vy:rnd(0,1.2),t:0,col:'#ffffff'});}
+  }
+  jumpPressed=false;
+  if(!key.jump && p.vy<-3) p.vy+=0.65;
+  p.vy+=0.42; if(p.vy>10)p.vy=10;
+  const prevFoot=p.y+FOOT;
+  p.x+=p.vx; p.y+=p.vy;
+  if(p.x<0)p.x=0; if(p.x>W-CW)p.x=W-CW;
+  if(!key.left&&!key.right&&!(p.down>0))p.x+=(80-p.x)*0.04; // 横移動の操作はないので、はじかれても定位置へ戻る
+  if(p.y>=GROUND-FOOT){p.y=GROUND-FOOT;p.vy=0;if(!p.on){p.on=true;p.jumps=0;G.combo=0;}
+    if(p.kb){p.kb=false;p.vx=0;G.shake=4;for(let i=0;i<8;i++)G.fx.push({x:p.x+CW/2+rnd(-10,10),y:GROUND-2,vx:rnd(-1.5,1.5),vy:rnd(-1.6,-0.4),t:0,col:'#c9c2b0'});}}
+  if(p.inv>0)p.inv=Math.min(p.inv,120)-1;
+  p.anim+=Math.abs(p.vx)*0.5+G.speed*0.35;
+
+  const nearGoal=G.dist>GOAL-900;
+  // 東京の渋滞ゾーン：車がびっしり並ぶ。屋根を渡って抜けろ
+  const jam=G.stage===1&&ROUTE>JAM_FROM&&ROUTE<JAM_TO;
+  if(jam&&!G.jamOn){G.jamOn=true;G.banner={s:'渋滞ゾーン！ 屋根の上を駆け抜けろ！',t:0,col:'#ffb36b'};snd('honk');}
+  if(G.jamOn&&!jam&&!G.jamDone){G.jamOn=false;G.jamDone=true;G.score+=1000;G.banner={s:'渋滞突破！ +1000',t:0,col:'#7dff8a'};snd('stage');}
+  if(jam){
+    const rm=G.cars.filter(c=>c.state==='run').sort((a,b)=>b.x-a.x)[0];
+    if(!rm||rm.x+rm.w<W+30)spawnJamCar(rm?Math.max(W+4,rm.x+rm.w+rnd(4,12)):W+10);
+  }
+  if(!(G.spawnT<9999))G.spawnT=60; // 念のため：間隔がおかしな値になったら戻す
+  if(!nearGoal && !jam && --G.spawnT<=0){
+    spawnCar();
+    const busy=[1,1.1,1.1,1.0][G.stage]; // 東京・埼玉は車の間隔をやや広め（埼玉はコーンがあるぶん東京並みに）
+    // 速くなるほど車がすぐ画面外に出るので、速度に合わせて間隔を詰める
+    G.spawnT=Math.max(58,120-G.time/60*0.5)*rnd(0.7,1.3)*busy*Math.pow(2.1/Math.max(2.1,G.speed),0.6)*Math.pow(0.88,LP); // 倒れて止まっている間（速さ0）に割り算で無限大になり、車が二度と出なくなっていたのを修正
+  }
+  // 三角コーンは埼玉と太田だけ（横浜・東京には置かない）
+  if(G.stage<2)G.coneT=Math.max(G.coneT,rnd(120,240));
+  if(!nearGoal && !jam && G.stage>=2 && --G.coneT<=0 && G.spawnT>25){
+    G.cones.push({x:W+10});if(Math.random()<0.15)G.cones.push({x:W+28});
+    G.spawnT+=30;G.coneT=rnd(320,540);
+  }
+  // さつまいも。まれに（約15%）群馬名物の焼きまんじゅう＝全回復
+  if(--G.itemT<=0){G.items.push({x:W+10,y:rnd(110,165),t:0,kind:Math.random()<0.15?'manju':undefined});G.itemT=rnd(600,1000);} // 芋は少し多めに
+  // ペットボトル：水分が減っているほど早く出る
+  // さつまいもと同じ高さに出す
+  if(--G.waterT<=0){G.items.push({x:W+10,y:rnd(110,165),t:0,kind:'water'});G.waterT=(G.lap||1)>=2?(G.water<50?rnd(420,620):rnd(800,1200)):(G.water<50?rnd(280,420):rnd(520,760));} // 行きは多め
+  if(!G.p.mecha && --G.mechaT<=0){G.items.push({x:W+10,y:rnd(95,140),t:0,kind:'mecha'});G.mechaT=rnd(1800,2700);}
+  if(p.mecha>0){p.mecha--;if(p.mecha===0){addText(p.x+23,p.y-8,'ザクいもっち終了','#cfe0ff');snd('mechaEnd');}}
+  if(G.dist>=GOAL-W && !G.gate) G.gate={x:W+20};
+
+  for(const c of G.cars){
+    c.t++;
+    if(c.state==='fly'){c.x+=c.vx-G.speed*0.3;c.fy+=c.vy;c.vy+=0.32;c.rot+=c.vr;continue;}
+    c.x-=c.state==='run'?G.speed+c.v:G.speed;
+  }
+  const run=G.cars.filter(c=>c.state==='run').sort((a,b)=>a.x-b.x);
+  // 追い越し：前の車に追いついたら、奥の車線が空いていれば移って抜く。抜いたら手前に戻る
+  const laneFree=(lane,c,mg)=>!run.some(d=>d!==c&&d.lane===lane&&d.x<c.x+c.w+mg&&d.x+d.w>c.x-mg);
+  for(const c of run){
+    c.lane=c.lane||0;
+    const ahead=run.filter(d=>d!==c&&d.lane===c.lane&&d.x<c.x).sort((a,b)=>b.x-a.x)[0];
+    if(ahead&&c.x<ahead.x+ahead.w+30){
+      if(c.lane===0&&c.v>ahead.v+0.1&&laneFree(1,c,20)){c.lane=1;}
+      else if(c.x<ahead.x+ahead.w+12){c.x=ahead.x+ahead.w+12;c.v=Math.min(c.v,ahead.v);}
+    }
+    // スバル車はスバル車を抜かない：前のスバル車（どの車線でも）と車間をあけてついていく
+    if(c.subaru){
+      const sa=run.filter(d=>d!==c&&d.subaru&&d.x<c.x).sort((a,b)=>b.x-a.x)[0];
+      const gap=sa?subGap(sa):0;
+      if(sa&&c.x<sa.x+sa.w+gap+30){c.v=Math.min(c.v,sa.v);if(c.lane===1&&laneFree(0,c,24))c.lane=0;}
+      if(sa&&c.x<sa.x+sa.w+gap)c.x=sa.x+sa.w+gap;
+    }
+    if(c.lane===1&&laneFree(0,c,24))c.lane=0;
+    const ty=c.lane?-10:0;c.ly=(c.ly||0)+Math.sign(ty-(c.ly||0))*Math.min(1,Math.abs(ty-(c.ly||0)));
+  }
+  // コーン
+  for(const k of G.cones){
+    if(k.fly){k.x+=k.vx-G.speed;k.y=(k.y||0)+k.vy;k.vy+=0.35;k.rot+=k.vr;continue;}
+    k.x-=G.speed;
+  }
+  G.cones=G.cones.filter(k=>k.x>-30&&(k.y||0)<120);
+
+  const fx0=p.x+15,fx1=p.x+29, bx0=p.x+12,bx1=p.x+33;
+  for(const c of run){
+    if(p.mecha>0&&c.subaru)continue; // ザクいもっち中はスバル車をすり抜ける
+    const foot=p.y+FOOT;
+    const sF=surface(c,fx0,fx1);
+    if(sF!==null && p.vy>0 && prevFoot<=sF+6 && foot>=sF){
+      p.y=sF-FOOT;
+      if(c.subaru&&p.mecha>0){
+        p.vy=-7;p.jumps=1;blowCar(c,1);
+      }else if(c.subaru){
+        p.vy=-6.2;p.jumps=1;snd('honk');hurt(p,SUBARU_MSG(c.m.name));burst(p.x+23,sF,'#7fa8ff',8);
+      }else{
+        c.state='squash';G.combo++;const pts=100*G.combo;G.score+=pts;
+        p.vy=key.jump?-9:-6.6;p.jumps=1;snd('stomp');
+        burst(c.x+c.w/2,sF,c.color,14);
+        addText(c.x+c.w/2,sF-12,G.combo>1?`${pts} ×${G.combo}`:`${pts}`,'#ffe14d');G.shake=3;
+        G.say={s:pick(['やっぱりスバルがナンバー1！','スバルは宇宙イチ！','ｵﾘｬｰ!!','どいてどいてー！']),t:0};
+      }
+      break;
+    }
+    const sB=surface(c,bx0,bx1);
+    if(sB!==null && foot>sB+5 && p.mecha>0){blowCar(c,c.x+c.w/2>p.x+23?1:-1);continue;}
+    if(sB!==null && foot>sB+5 && p.inv<=0){
+      hurt(p,pick(c.subaru?[`${c.m.name}にはね飛ばされた！`,'いっったー！！！']:['いっったー！！！']));
+      if(!p.kb){p.vx=-3.5;p.vy=-4.5;}p.on=false;p.jumps=1;break;
+    }
+  }
+  for(const k of G.cones){
+    if(k.fly)continue;
+    if(bx0<k.x+12&&bx1>k.x+4&&p.y+FOOT>GROUND-15){
+      if(p.inv<=0&&!p.mecha){hurt(p,null);G.say={s:'足首がー!!',t:0};p.vy=-4;p.on=false;p.jumps=1;}
+      knockCone(k,p.vx>=0?-1:1);snd('cone');
+    }
+  }
+  G.cars=G.cars.filter(c=>c.x>-c.w-10&&c.x<W+200&&(c.fy||0)<300);
+  for(const it of G.items){
+    it.t++;it.x-=G.speed;const iy=it.y+Math.sin(it.t/12)*4;
+    const iw=(!it.kind||it.kind==='manju')?28:16; // 焼き芋・焼きまんじゅうは横長
+    if(bx0<it.x+iw&&bx1>it.x&&p.y+3<iy+12&&p.y+FOOT>iy){
+      it.got=true;
+      if(it.kind==='mecha'){
+        p.mecha=MECHA_TIME;snd('mecha');G.shake=6;burst(it.x+12,iy+10,'#ffd23f',18);
+        addText(it.x+12,iy-8,'ザクいもっち！ 10秒無敵','#ffd23f');continue;
+      }
+      if(it.kind==='water'){
+        G.water=Math.min(WATER_MAX,G.water+WATER_GET);snd('water');burst(it.x+6,iy+10,'#9fd0ff',10);
+        addText(it.x+6,iy-6,'ゴクゴク！ 水分満タン','#9fd0ff');continue;
+      }
+      if(it.kind==='manju'){
+        if(G.hp<5&&(G.lap||1)<2){G.hp=5;addText(it.x+14,iy-6,'HP全回復！','#7dff8a');}else{G.score+=1500;addText(it.x+14,iy-6,'+1500','#7dff8a');}
+        snd('heal');snd('water');burst(it.x+14,iy+6,'#ffb35c',16);burst(it.x+14,iy+6,'#fff2c0',8);G.say={s:'焼きまんじゅうだ！',t:0};continue;
+      }
+      if(G.hp<5&&(G.lap||1)<2){G.hp++;addText(it.x+8,iy-6,'HP+1','#7dff8a');}else{G.score+=500;addText(it.x+8,iy-6,'+500','#7dff8a');}
+      snd('heal');burst(it.x+8,iy+6,'#ffcf6b',10);G.say={s:'うまい！',t:0};
+    }
+  }
+  G.items=G.items.filter(i=>!i.got&&i.x>-20);
+  if(G.gate){
+    G.gate.x-=G.speed;
+    if(G.gate.x<p.x+10 && G.mode==='play'){
+      G.mode='clear';G.overT=0;
+      if((G.lap||1)>=2){G.bonus=0;G.newBestTime=false;if(!(bestTime>0)||G.rt<bestTime){bestTime=G.rt;G.newBestTime=true;try{localStorage.setItem('gogoimo_besttime',bestTime);}catch(e){}}}
+      else{G.bonus=G.hp*1000;G.score+=G.bonus;}
+      saveBest();bgmStop();snd('clear');submitRank('score',G.score);if((G.lap||1)>=2)setTimeout(()=>submitRank('time',G.rt),600);
+      for(let i=0;i<40;i++)G.fx.push({x:rnd(0,W),y:rnd(-20,40),vx:rnd(-1,1),vy:rnd(0,2),t:0,col:pick(['#ffe14d','#ff6b6b','#7fa8ff','#7dff8a','#fff'])});
+    }
+  }
+  if(G.time%60===0)G.score+=1;
+  for(const f of G.fx){f.t++;f.x+=f.vx-G.speed*0.3;f.y+=f.vy;f.vy+=0.22;}
+  G.fx=G.fx.filter(f=>f.t<40);
+  for(const t of G.texts)t.t++;
+  G.texts=G.texts.filter(t=>t.t<60);
+  if(G.say)G.say.t++;
+  if(G.shake>0)G.shake--;
+}
+
+// ---------- 描画 ----------
+function txt(s,x,y,size,col,align='left'){
+  ctx.font=`bold ${size}px "Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif`;
+  ctx.textAlign=align;ctx.textBaseline='middle';
+  ctx.lineWidth=Math.max(2.5,size/3.5);ctx.strokeStyle='#16121e';ctx.lineJoin='round';ctx.strokeText(s,x,y);
+  ctx.fillStyle=col;ctx.fillText(s,x,y);
+}
+function heart(x,y,full){
+  const rows=[".KK.KK.","KRRKRRK","KRRRRRK",".KRRRK.","..KRK..","...K..."];
+  rows.forEach((r,j)=>{for(let i=0;i<7;i++){const ch=r[i];if(ch==='.')continue;
+    ctx.fillStyle=ch==='K'?'#16121e':(full?'#ff4a5a':'#4a3b55');ctx.fillRect(x+i*2,y+j*2,2,2);}});
+}
+function star(cx,cy,col){
+  const P=[[0,-3],[1,-1],[3,-1],[1,1],[2,3],[0,2],[-2,3],[-1,1],[-3,-1],[-1,-1]];
+  ctx.beginPath();P.forEach((p,i)=>{const X=cx+p[0]*2,Y=cy+p[1]*2;i?ctx.lineTo(X,Y):ctx.moveTo(X,Y);});ctx.closePath();
+  ctx.fillStyle=col;ctx.fill();ctx.strokeStyle='#16121e';ctx.lineWidth=1.2;ctx.stroke();
+}
+function drawCar(c,label=true){
+  const X=Math.round(c.x),Y=GROUND-c.h+PAD+Math.round(c.ly||0);
+  const fr=c.spr.fr[((c.t*(G.speed+c.v)*0.12)|0)%4];
+  if(c.state==='squash'){ctx.drawImage(fr,X,GROUND+PAD-Math.round(c.h*0.35),c.w,Math.round(c.h*0.35));return;}
+  if(c.state==='fly'){ctx.save();ctx.translate(X+c.w/2,Y+c.h/2+c.fy);ctx.rotate(c.rot*Math.PI);ctx.drawImage(fr,-c.w/2,-c.h/2,c.w,c.h);ctx.restore();return;}
+  ctx.fillStyle='rgba(0,0,0,.22)';ctx.fillRect(X+2,GROUND-1,c.w-4,3);ctx.fillStyle='rgba(0,0,0,.18)';ctx.fillRect(X+8,GROUND-2,c.w-16,2);
+  const bob=((c.t/6)|0)%2;
+  ctx.drawImage(fr,X,Y-bob,c.w,c.h);
+  if(c.subaru&&label){
+    const top=Y+Math.min(...c.spr.top.filter(isFinite))-14+(((c.t/8)|0)%2);
+    star(X+c.w/2-((c.m.name.length*3.2)|0)-4,top,'#ffe14d');
+    txt(c.m.name,X+c.w/2+4,top,10,'#cfe0ff','center');
+  }
+}
+function drawPlayer(p){
+  let spr;
+  if(p.hurtT>0)spr=CHAR.hurt;
+  else if(!p.on)spr=CHAR.jump;
+  else if(G.mode==='intro'){const h=G.hopAt||8;spr=G.introT>h&&G.introT<h+18?CHAR.jump:CHAR.idle;}
+  else spr=CHAR.run[((p.anim/5)|0)%8];
+  if(p.down>0&&p.kb){ // はじき飛ばされて、くるくる回りながら後ろへ
+    ctx.save();ctx.translate(Math.round(p.x)+CW/2,Math.round(p.y)+FOOT/2);ctx.rotate(-(G.time%60)/60*Math.PI*2*1.5);ctx.drawImage(CHAR.hurt,-CW/2,-FOOT/2);ctx.restore();
+    return;
+  }
+  if(p.down>0){ // バタッと倒れている
+    const X=Math.round(p.x),f=p.face?-1:1;
+    ctx.fillStyle='rgba(0,0,0,.28)';ctx.fillRect(X+2,GROUND-1,42,3);
+    ctx.save();ctx.translate(X+CW/2,GROUND-12);ctx.rotate(-f*Math.PI/2);if(p.face)ctx.scale(-1,1);ctx.drawImage(CHAR.hurt,-CW/2,-FOOT/2-6);ctx.restore();
+    for(let i=0;i<3;i++){const a=G.time/8+i*2.1;txt('★',X+CW/2-f*16+Math.cos(a)*10,GROUND-30+Math.sin(a)*4,9,'#ffe14d','center');}
+    return;
+  }
+  const blink=p.inv>0&&((p.inv/4|0)%2)&&G.mode==='play';
+  if(blink)return;
+  ctx.fillStyle='rgba(0,0,0,.28)';ctx.fillRect(Math.round(p.x)+11,GROUND-1,22,3);
+  const X=Math.round(p.x),Y=Math.round(p.y);
+  ctx.save();
+  if(!p.on&&p.jumps===2&&p.vy<0){ctx.translate(X+CW/2,Y+FOOT/2);ctx.rotate((p.vy+7.8)/7.8*Math.PI*2*(p.face?-1:1));ctx.translate(-CW/2,-FOOT/2);}
+  else ctx.translate(X,Y);
+  if(p.face){ctx.translate(CW,0);ctx.scale(-1,1);}
+  if(p.mecha>0){
+    // オーラ
+    ctx.globalAlpha=0.35+0.2*Math.sin(G.time/3);ctx.fillStyle='#7dff8a';
+    ctx.beginPath();ctx.ellipse(CW/2,FOOT/2+2,20,28,0,0,7);ctx.fill();ctx.globalAlpha=1;
+  }
+  ctx.drawImage(spr,0,0);
+  if(G.mode==='intro'&&(G.introRet?G.introT<235:G.introT<150)){ // 耳にスマホを当てて電話中
+    ctx.fillStyle='#16121e';ctx.fillRect(14,6,5,10);ctx.fillStyle='#2a2a34';ctx.fillRect(15,7,3,8);ctx.fillStyle='#c68a5c';ctx.fillRect(13,13,5,4);
+  }
+  if(p.mecha>0 && !(p.mecha<180 && ((p.mecha/6)|0)%2)) ctx.drawImage(((G.time/20)|0)%6?HELMET:HELMET_OFF,8,-3);
+  ctx.restore();
+}
+function drawSay(p,s){ // いもっちの吹き出し
+  ctx.font='bold 11px "Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif';
+  const w=Math.ceil(ctx.measureText(s).width)+12,h=18;
+  let x=Math.round(p.x+CW/2-w/2),y=Math.round(p.y-h-8);
+  x=Math.max(4,Math.min(W-w-4,x));y=Math.max(40,y);
+  ctx.fillStyle='#16121e';ctx.fillRect(x-1,y-1,w+2,h+2);
+  ctx.fillStyle='#ffffff';ctx.fillRect(x,y,w,h);
+  const tx=Math.max(x+6,Math.min(x+w-10,Math.round(p.x+CW/2)));
+  ctx.fillStyle='#16121e';ctx.fillRect(tx-1,y+h,7,2);ctx.fillRect(tx,y+h+2,4,2);ctx.fillRect(tx+1,y+h+4,2,2);
+  ctx.fillStyle='#ffffff';ctx.fillRect(tx,y+h,5,1);ctx.fillRect(tx+1,y+h+1,3,2);
+  ctx.fillStyle='#1f44e6';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(s,x+w/2,y+h/2+1);
+}
+function drawGate(g){
+  const X=Math.round(g.x);
+  rect(X-2,120,5,105,'#e4e8ee');rect(X+86,120,5,105,'#e4e8ee');
+  for(let i=0;i<23;i++)for(let j=0;j<2;j++)rect(X-2+i*4,112+j*4,4,4,(i+j)%2?'#16121e':'#ffffff');
+  rect(X-2,120,93,16,'#e8483b');
+  const ret=(G.lap||1)>=2;
+  txt(ret?'GOAL 横浜 編集部':'GOAL 太田',X+44,128,11,'#ffffff','center');
+  if(ret){ // 編集長が待っている
+    ctx.fillStyle='rgba(0,0,0,.28)';ctx.fillRect(X+104,GROUND-1,30,3);
+    ctx.drawImage(EDITOR,X+98,GROUND-58);
+    txt('編集長',X+120,GROUND-66,9,'#ffd27a','center');
+  }else if(G.mode!=='clear'){ // 太田のゴールではMARIOが出迎え（到着画面では大きいMARIOを出すので、ここでは消す）
+    ctx.fillStyle='rgba(0,0,0,.28)';ctx.fillRect(X+104,GROUND-1,30,3);
+    ctx.drawImage(MARIO,X+98,GROUND-60,44,62);
+    txt('MARIO',X+120,GROUND-68,9,'#9fd0ff','center');
+  }
+}
+// 帰り道の時計：0時に太田を出発。ゲームの1秒＝2分なので、3分（DAWN）で朝6時になる
+function drawClock(x,y,r,f){
+  const min=f/30,late=f>DAWN;                       // 0時からの経過（分）
+  ctx.save();
+  ctx.fillStyle='rgba(0,0,0,.45)';ctx.beginPath();ctx.arc(x+1,y+1.5,r+2,0,7);ctx.fill();
+  ctx.fillStyle=late?'#ffe6c8':'#1d2550';ctx.beginPath();ctx.arc(x,y,r+2,0,7);ctx.fill();          // 縁
+  ctx.fillStyle=late?'#fff6e6':'#f4f1e6';ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();             // 文字盤
+  for(let i=0;i<12;i++){const a=i/12*Math.PI*2,l=i%3?1.6:3;ctx.strokeStyle=i%3?'#8a8fa8':'#2a2f48';ctx.lineWidth=i%3?0.8:1.4;
+    ctx.beginPath();ctx.moveTo(x+Math.sin(a)*(r-1),y-Math.cos(a)*(r-1));ctx.lineTo(x+Math.sin(a)*(r-1-l),y-Math.cos(a)*(r-1-l));ctx.stroke();}
+  ctx.fillStyle='#2a2f48';ctx.font='bold 5px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('12',x,y-r+6);ctx.fillText('6',x,y+r-6);ctx.fillText('3',x+r-5,y);ctx.fillText('9',x-r+5,y);
+  const ha=(min/60)/12*Math.PI*2,ma=(min%60)/60*Math.PI*2;ctx.lineCap='round';
+  ctx.strokeStyle='#22263a';ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.sin(ha)*r*0.5,y-Math.cos(ha)*r*0.5);ctx.stroke();   // 短針
+  ctx.strokeStyle=late?'#e8483b':'#3a4a8a';ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.sin(ma)*r*0.8,y-Math.cos(ma)*r*0.8);ctx.stroke(); // 長針
+  ctx.fillStyle='#e8483b';ctx.beginPath();ctx.arc(x,y,1.4,0,7);ctx.fill();
+  ctx.restore();
+  const h=Math.floor(min/60),m=Math.floor(min%60);
+  txt(`${h<12?'午前':'午後'}${h%12}:${String(m).padStart(2,'0')}`,x+r+6,y-4,11,late?'#ff9a9a':'#ffffff');
+  txt(late?'夜が明けた！':h>=5?'もうすぐ夜明け':'夜明けは6時',x+r+6,y+8,8,late?'#ffb36b':'#cfe0ff');
+}
+function progressBar(){
+  const x0=150,x1=330,y=14;
+  rect(x0,y-1,x1-x0,3,'rgba(255,255,255,.35)');
+  const f=Math.min(1,G.dist/GOAL);rect(x0,y-1,(x1-x0)*f,3,'#ffe14d');
+  const ret=(G.lap||1)>=2;
+  STAGES.forEach((s,i)=>{const d=ret?(i===3?0:GOAL-STAGES[i+1].start):s.start;const x=x0+(x1-x0)*d/GOAL;rect(x-1,y-3,3,7,'#fff');txt(s.name.replace('群馬 ',''),x,y+11,8,i===G.stage?'#ffe14d':'#dfe6ff','center');});
+  rect(x1-1,y-4,3,9,'#e8483b');txt('GOAL',x1,y+11,8,'#ff9a9a','center');
+  const px=x0+(x1-x0)*f;ctx.drawImage(CHAR.run[((G.time/5)|0)%8],0,0,CW,CH,px-7,y-13,14,16);
+}
+function draw(){
+  const p=G.p;
+  const showRB=!(G.mode==='play'||G.mode==='intro'); // ランキングボタンはプレイ中は隠す
+  if(rankBtn.hidden===showRB){rankBtn.hidden=!showRB;if(!showRB)rankEl.hidden=true;}
+  if(G.paused&&G.mode!=='play'){G.paused=false;pauseBtn.textContent='⏸';}
+  const showPB=G.mode==='play';if(pauseBtn.hidden===showPB)pauseBtn.hidden=!showPB;
+  ctx.save();ctx.clearRect(0,0,W,H);
+  if(G.shake>0)ctx.translate(rnd(-1,1)*G.shake*0.5,rnd(-1,1)*G.shake*0.5);
+  drawBG(G.dist);
+  const night=(G.lap||1)>=2&&G.mode!=='title'?Math.max(0,0.72*(1-(G.rt||0)/DAWN)):0;
+  if(night>0){ // 夜空と星
+    ctx.fillStyle=`rgba(8,12,44,${night})`;ctx.fillRect(-4,-4,W+8,H+8);
+    ctx.fillStyle=`rgba(255,255,230,${Math.min(1,night*1.3)})`;
+    for(let i=0;i<40;i++){const sx=(i*97+((G.dist*0.05)|0))%W,sy=(i*53)%120;if((i+((G.time/20)|0))%7)ctx.fillRect(W-sx,sy+4,1.5,1.5);}
+  }
+  if((G.lap||1)>=2&&G.mode!=='title'&&night<0.15){ // 朝焼け
+    ctx.fillStyle=`rgba(255,180,120,${0.12*(1-night/0.15)})`;ctx.fillRect(0,0,W,140);
+  }
+  if(G.gate)drawGate(G.gate);
+  for(const it of G.items){const iy=it.y+Math.sin(it.t/12)*4;
+    if(it.kind==='mecha'){
+      ctx.globalAlpha=0.4+0.25*Math.sin(it.t/5);ctx.fillStyle='#7dff8a';ctx.beginPath();ctx.arc(it.x+14,iy+12,17,0,7);ctx.fill();ctx.globalAlpha=1;
+      ctx.drawImage(HELMET,Math.round(it.x),Math.round(iy));
+      if(((it.t/8)|0)%2){ctx.fillStyle='#ffffff';ctx.fillRect(Math.round(it.x)+26,Math.round(iy)+2,2,2);ctx.fillRect(Math.round(it.x)-2,Math.round(iy)+18,2,2);}
+    } else if(it.kind==='water'){
+      ctx.globalAlpha=0.3+0.2*Math.sin(it.t/6);ctx.fillStyle='#9fd0ff';ctx.beginPath();ctx.arc(it.x+6,iy+11,12,0,7);ctx.fill();ctx.globalAlpha=1;
+      ctx.drawImage(BOTTLE,Math.round(it.x),Math.round(iy));
+    } else if(it.kind==='manju'){
+      ctx.globalAlpha=0.3+0.2*Math.sin(it.t/6);ctx.fillStyle='#ffc070';ctx.beginPath();ctx.arc(it.x+14,iy+6,15,0,7);ctx.fill();ctx.globalAlpha=1;
+      ctx.drawImage(MANJU,Math.round(it.x),Math.round(iy));
+    } else {
+      ctx.drawImage(IMO,Math.round(it.x),Math.round(iy));
+      // ほかほかの湯気（割れ目から3すじ立ちのぼる）
+      for(let k=0;k<3;k++){const t=((it.t+k*14)%42)/42;ctx.fillStyle=`rgba(255,255,255,${0.7*(1-t)})`;
+        const sx=it.x+16+(k-1)*3+Math.sin(t*6+k*2)*1.5,sy=iy+3-t*14;ctx.fillRect(Math.round(sx),Math.round(sy),2,2);ctx.fillRect(Math.round(sx)+(k%2?1:-1),Math.round(sy)-2,1,2);}
+    }}
+  // 帰り道の夜：車のヘッドライトの光（道路を照らす）。明るくなるにつれて消える
+  const hl=night>0.06?Math.min(1,(night-0.06)/0.3):0;
+  if(hl>0){ctx.save();ctx.globalCompositeOperation='lighter';
+    for(const c of G.cars){if(c.state!=='run')continue;
+      const fx=c.x+PAD+1,hy=GROUND+(c.ly||0)-c.m.h*0.36,len=110;
+      const gr=ctx.createLinearGradient(fx,0,fx-len,0);gr.addColorStop(0,`rgba(255,236,170,${0.42*hl})`);gr.addColorStop(1,'rgba(255,236,170,0)');
+      ctx.fillStyle=gr;ctx.beginPath();ctx.moveTo(fx,hy-1.5);ctx.lineTo(fx-len,GROUND+(c.ly||0)-14);ctx.lineTo(fx-len,GROUND+(c.ly||0)+16);ctx.lineTo(fx,hy+2);ctx.closePath();ctx.fill();
+      const pool=ctx.createRadialGradient(fx-52,GROUND+(c.ly||0)+6,2,fx-52,GROUND+(c.ly||0)+6,46);pool.addColorStop(0,`rgba(255,230,160,${0.3*hl})`);pool.addColorStop(1,'rgba(255,230,160,0)');
+      ctx.fillStyle=pool;ctx.beginPath();ctx.ellipse(fx-52,GROUND+(c.ly||0)+6,52,11,0,0,7);ctx.fill();   // アスファルトに落ちる光
+    }ctx.restore();}
+  G.cars.filter(c=>c.state!=='run').forEach(c=>drawCar(c));
+  G.cars.filter(c=>c.state==='run').sort((a,b)=>(a.ly||0)-(b.ly||0)).forEach(c=>drawCar(c)); // 奥の車線を先に
+  if(hl>0){ctx.save();ctx.globalCompositeOperation='lighter'; // ヘッドライトそのものの光
+    for(const c of G.cars){if(c.state!=='run')continue;const fx=c.x+PAD+1,hy=GROUND+(c.ly||0)-c.m.h*0.36;
+      const g2=ctx.createRadialGradient(fx,hy,0,fx,hy,9);g2.addColorStop(0,`rgba(255,250,225,${0.95*hl})`);g2.addColorStop(1,'rgba(255,240,190,0)');ctx.fillStyle=g2;ctx.fillRect(fx-9,hy-9,18,18);}
+    ctx.restore();}
+  // コーンは手前の路肩（車の前）に置く
+  for(const k of G.cones){
+    if(k.fly){ctx.save();ctx.translate(k.x+8,GROUND-1+k.y);ctx.rotate(k.rot*4);ctx.drawImage(CONE,-8,-10);ctx.restore();}
+    else{ctx.fillStyle='rgba(0,0,0,.28)';ctx.fillRect(Math.round(k.x)+1,GROUND+7,14,3);ctx.drawImage(CONE,Math.round(k.x),GROUND-11);}
+  }
+  if(G.mode!=='title')drawPlayer(p);
+  for(const f of G.fx){ctx.fillStyle=f.col;ctx.fillRect(Math.round(f.x),Math.round(f.y),3,3);}
+  for(const t of G.texts){txt(t.s,t.x,t.y-t.t*0.5,12,t.col,'center');}
+  if(G.say&&G.say.t<80&&(G.mode==='play'||G.mode==='intro'))drawSay(p,G.say.s);
+  ctx.restore();
+
+  if(G.mode!=='title'){
+    const RETH=(G.lap||1)>=2;
+    if(RETH)drawClock(20,14,13,G.rt||0);
+    else for(let i=0;i<Math.max(5,G.hp);i++)heart(8+i*16,8,i<G.hp);
+    txt(`SCORE ${G.score}`,W-8,36,13,'#fff','right');
+    txt(RETH?`BEST TIME ${bestTime?fmtTime(bestTime):'--:--.-'}`:`BEST ${best}`,W-8,51,10,'#ffd27a','right');
+    if(RETH&&(G.rt||0)>DAWN&&((G.time/20)|0)%2)txt('朝になっちゃった！急げ！',W/2,64,11,'#ffb36b','center');
+    const km=Math.max(0,(GOAL-G.dist)/GOAL*TOTAL_KM);
+    const HY=RETH?8:0;
+    txt(RETH?`横浜まで ${km.toFixed(1)}km　帰り道タイムアタック`:`太田まで ${km.toFixed(1)}km`,8,32+HY,10,'#cfe0ff');
+    // 水分ゲージ（二段ジャンプ1回＝1目盛り）
+    ctx.drawImage(BOTTLE,8,40+HY,8,15);
+    for(let i=0;i<WATER_MAX/WATER_JUMP;i++){
+      const lv=Math.max(0,Math.min(1,(G.water-i*WATER_JUMP)/WATER_JUMP));
+      rect(20+i*15,45+HY,13,7,'rgba(13,16,32,.6)');if(lv>0)rect(21+i*15,46+HY,Math.round(11*lv),5,lv<1?'#6fa8d8':'#3fb6ff');
+    }
+    if(G.water<WATER_JUMP&&((G.time/15)|0)%2)txt('水分ぎれ！',98,49+HY,9,'#ff9a9a');
+    progressBar();
+    if(G.combo>1)txt(`COMBO ×${G.combo}`,W/2,50,14,'#ffe14d','center');
+    if(p.mecha>0){
+      const f=p.mecha/MECHA_TIME;rect(W/2-60,62,120,6,'rgba(0,0,0,.5)');rect(W/2-60,62,120*f,6,'#7dff8a');
+      txt(`ザクいもっち ${Math.ceil(p.mecha/60)}秒`,W/2,76,11,'#7dff8a','center');
+    }
+    if((G.mode==='play'||(G.mode==='intro'&&G.introRet&&G.introT>=235))&&G.banner.t<150){const a=Math.min(1,(150-G.banner.t)/30);ctx.globalAlpha=a;
+      rect(0,84,W,34,'rgba(13,16,32,.55)');txt(G.banner.s,W/2,101,20,G.banner.col||'#ffffff','center');ctx.globalAlpha=1;}
+  }
+  if(G.paused&&G.mode==='play'){
+    ctx.fillStyle='rgba(13,16,32,.62)';ctx.fillRect(0,0,W,H);
+    txt('一時停止中',W/2,112,30,'#ffe14d','center');
+    txt(coarse()?'画面をタップで再開':'SPACE / P / ESC で再開',W/2,148,14,'#ffffff','center');
+  }
+  if(G.mode==='title') drawTitle();
+  if(G.mode==='over'){
+    ctx.fillStyle='rgba(13,16,32,.6)';ctx.fillRect(0,0,W,H);
+    txt('GAME OVER',W/2,90,34,'#ff6b6b','center');
+    txt(`SCORE ${G.score}　　${STAGES[G.stage].name}まで到達`,W/2,132,15,'#fff','center');
+    if(G.score>=best&&G.score>0)txt('NEW RECORD!',W/2,156,15,'#ffe14d','center');
+    txt(rankLine('score',G.score),W/2,176,12,'#ffd27a','center');
+    if(G.overT>50&&(G.overT/30|0)%2)txt(coarse()?'タップでもう一回':'ENTER でもう一回',W/2,196,13,'#fff','center');
+  }
+  if(G.mode==='clear'){
+    ctx.fillStyle='rgba(13,16,32,.5)';ctx.fillRect(0,0,W,H);
+    if((G.lap||1)>=2){
+      const t=G.rt||0,ok=t<=DAWN,rank=t<DAWN*0.85?'S':t<=DAWN?'A':t<DAWN*1.2?'B':'C';
+      txt(ok?'締切に間に合った！':'朝になっちゃった…',W/2,62,30,ok?'#ffe14d':'#ffb36b','center');
+      txt(`TIME ${fmtTime(t)}　　ランク ${rank}`,W/2,100,18,'#fff','center');
+      txt(G.newBestTime?'NEW BEST TIME!':`BEST TIME ${fmtTime(bestTime)}`,W/2,124,13,G.newBestTime?'#7dff8a':'#ffd27a','center');
+      ctx.drawImage(EDITOR,W/2-110,150,44*1.2,60*1.2);
+      txt(ok?'編集長「よし、間に合ったな。おつかれ！」':'編集長「遅い！…まあ、よくやった」',W/2+30,176,12,'#ffffff','center');
+      txt(`SCORE ${G.score}`,W/2+30,198,13,'#cfe0ff','center');
+      txt(rankLine('time',G.rt||0),W/2+30,218,12,'#ffd27a','center');
+      if(G.overT>50&&(G.overT/30|0)%2)txt(coarse()?'タップでタイトルへ':'ENTER でタイトルへ',W/2,244,13,'#fff','center');
+    }else{
+    txt('太田に到着！',W/2,58,30,'#ffe14d','center');
+    txt('横浜 → 太田　120km 完走',W/2,88,13,'#fff','center');
+    txt(`残りHPボーナス +${G.bonus}　　SCORE ${G.score}`,W/2,108,13,'#7dff8a','center');
+    ctx.drawImage(MARIO,W-82,122,44*1.2,62*1.2);                 // いもっちと重ならないよう右側に
+    txt('MARIO「スバルのまち太田へようこそ！」',W/2-10,150,12,'#ffffff','center');
+    txt(rankLine('score',G.score),W/2-10,174,12,'#ffd27a','center');
+    if(G.overT>50&&(G.overT/30|0)%2)txt(`${coarse()?'タップ':'ENTER'}で帰り道へ（夜のタイムアタック）`,W/2,204,13,'#fff','center');
+    }
+  }
+}
+const coarse=()=>matchMedia('(pointer:coarse)').matches;
+const mkDemo=(m,color,x,sub)=>({x,m,spr:getCar(m,color),subaru:sub,state:'run',t:0,v:0,w:m.w+PAD*2,h:m.h+PAD*2});
+const DEMO_S=mkDemo(SUBARU_MODELS[0],SUBARU_MODELS[0].color,52,true);
+const DEMO_O=mkDemo(OTHER_MODELS[0],'#d8312b',300,false);
+// ---------- タイトルロゴ（Claude作）：左の朝の横浜から右の夕焼けの太田へ、空と街並みが移っていく ----------
+let LOGO=null;
+function renderLogo(){
+  const LW=220,LH=60,S=2;                       // 背景はドット感を出すため低解像度で描いて2倍
+  const b=document.createElement('canvas');b.width=LW;b.height=LH;const g=b.getContext('2d');
+  // 空：朝の青 → 昼 → 午後 → 夕焼け
+  const sky=g.createLinearGradient(0,0,LW,0);
+  sky.addColorStop(0,'#4fa3e6');sky.addColorStop(0.35,'#7cc4f0');sky.addColorStop(0.62,'#f6b26b');sky.addColorStop(1,'#e8607a');
+  g.fillStyle=sky;g.fillRect(0,0,LW,LH);
+  const fade=g.createLinearGradient(0,0,0,LH);fade.addColorStop(0,'rgba(20,24,60,.35)');fade.addColorStop(.5,'rgba(20,24,60,0)');
+  g.fillStyle=fade;g.fillRect(0,0,LW,LH);
+  // 夕日（右）
+  g.fillStyle='#ffd27a';g.beginPath();g.arc(200,30,9,0,7);g.fill();
+  const sil='#2c3466',sil2='#3a4380',win='#ffe9a0';
+  const R=(x,y,w,h,c)=>{g.fillStyle=c;g.fillRect(x,y,w,h);};
+  const P=(pts,c)=>{g.fillStyle=c;g.beginPath();pts.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.closePath();g.fill();};
+  // 横浜：海・観覧車・高層タワー・吊り橋
+  R(0,46,58,6,'#2b6fae');
+  g.strokeStyle=sil2;g.lineWidth=1;g.beginPath();g.arc(12,34,9,0,7);g.stroke();
+  for(let i=0;i<8;i++){const a=i*Math.PI/4;g.beginPath();g.moveTo(12,34);g.lineTo(12+Math.cos(a)*9,34+Math.sin(a)*9);g.stroke();}
+  P([[9,46],[12,34],[15,46]],sil2);
+  P([[24,46],[36,46],[34,14],[26,14]],sil);R(27,10,6,4,sil);for(let y=18;y<44;y+=4)R(28,y,4,1,win);
+  R(40,40,18,2,sil2);R(44,26,2,16,sil2);R(53,26,2,16,sil2);
+  g.strokeStyle=sil2;for(let i=0;i<4;i++){g.beginPath();g.moveTo(45,27);g.lineTo(40+i*2,40);g.stroke();g.beginPath();g.moveTo(54,27);g.lineTo(56+i,40);g.stroke();}
+  // 東京：細いタワー・赤いタワー・高層ビル
+  [[60,30],[67,22],[100,26],[106,32]].forEach(([x,y],i)=>{R(x,y,7,52-y,i%2?sil:sil2);for(let wy=y+3;wy<48;wy+=4)R(x+2,wy,3,1,win);});
+  P([[76,52],[82,52],[80,6],[78,6]],'#d9e2ee');R(76,24,6,2,'#c2cede');R(77,16,4,2,'#c2cede');
+  P([[88,52],[98,52],[93.5,18],[92.5,18]],'#e8442c');R(90,34,6,1,'#ffffff');R(89,42,8,1,'#ffffff');
+  // 埼玉：田んぼ・家・鉄塔
+  R(110,46,56,6,'#7fb04a');
+  [[114,0],[128,1],[142,2]].forEach(([x,k])=>{R(x,40,11,7,'#f2ece0');P([[x-1,40],[x+12,40],[x+5.5,35]],['#8a3b2e','#3b4f6b','#5a5a62'][k]);R(x+2,42,3,3,'#8fb7d6');});
+  P([[156,48],[162,48],[159.5,22],[158.5,22]],'#8b90a0');R(154,27,10,1,'#8b90a0');
+  g.strokeStyle='rgba(40,40,60,.6)';g.beginPath();g.moveTo(154,27);g.quadraticCurveTo(140,32,120,28);g.stroke();
+  // 群馬 太田：赤城山・工場・夕焼け
+  P([[160,48],[178,30],[188,22],[194,25],[200,21],[210,30],[220,40],[220,48]],'#4b3f7a');
+  R(176,38,34,10,'#d9dde3');for(let x=176;x<210;x+=6)P([[x,38],[x+6,38],[x+6,34]],'#b9bfc8');
+  R(205,24,3,14,'#a9adb6');R(205,23,3,2,'#e8483b');R(184,41,14,4,'#1f4fc4');
+  // 道路
+  R(0,52,LW,8,'#3a3a46');for(let x=2;x<LW;x+=12)R(x,55,6,1,'#f0e6b0');
+  // 合成：パネル・ドットの背景・枠
+  const c=document.createElement('canvas');c.width=LW*S;c.height=LH*S+8;const o=c.getContext('2d');o.imageSmoothingEnabled=false;
+  o.fillStyle='#16121e';o.fillRect(0,0,c.width,c.height);
+  o.drawImage(b,4,4,LW*S-8,LH*S-8+8);
+  o.strokeStyle='#ffe14d';o.lineWidth=2;o.strokeRect(5,5,c.width-10,c.height-10);
+  // 文字：GOGO（青）＋ いもっち！（黄色→オレンジ）。いもっちと車を左に置くので、文字は右に寄せて幅に収める
+  const font=s=>`900 ${s}px "Hiragino Kaku Gothic StdN","Hiragino Sans","Yu Gothic UI","Yu Gothic",Meiryo,sans-serif`;
+  const X0=104,XMAX=c.width-14;
+  o.font=font(50);const m1=o.measureText('GOGO').width;o.font=font(46);const m2=o.measureText('いもっち！').width;
+  const k=Math.min(1,(XMAX-X0-6)/(m1+m2+6));                                   // はみ出すときは少し小さく
+  o.save();o.transform(1,0,-0.12,1,0,0); // 少し右に傾けて勢いを出す
+  o.lineJoin='round';o.textBaseline='alphabetic';
+  const word=(s,x,y,size,top,bot)=>{
+    o.font=font(size);
+    o.lineWidth=10;o.strokeStyle='#16121e';o.strokeText(s,x+3,y+4);   // 影
+    o.strokeText(s,x,y);
+    const gr=o.createLinearGradient(0,y-size,0,y);gr.addColorStop(0,top);gr.addColorStop(1,bot);
+    o.fillStyle=gr;o.fillText(s,x,y);
+    o.lineWidth=1.5;o.strokeStyle='rgba(255,255,255,.7)';o.strokeText(s,x,y-1);
+    return o.measureText(s).width;
+  };
+  const w1=word('GOGO',X0+10,72,50*k,'#bff0ff','#2f8ee8');
+  word('いもっち！',X0+10+w1+6,74,46*k,'#ffe14d','#ff7a00');
+  o.restore();
+  // いもっちが車を踏んでジャンプ（左側・文字より手前に描いて隠れないようにする）
+  const car=getCar(OTHER_MODELS[0],'#d8312b').fr[0];const cw=car.width/CS*0.9,ch=car.height/CS*0.9;
+  o.drawImage(car,10,c.height-12-ch,cw,ch);
+  o.fillStyle='rgba(255,255,255,.85)';[[8,30,22],[4,42,28],[10,54,18]].forEach(([x,y,w])=>o.fillRect(x,y,w,3)); // スピード線
+  o.save();o.translate(34,4);o.scale(1.5,1.5);o.drawImage(CHAR.jump,0,0);o.restore();
+  return c;
+}
+// ---------- タイトルロゴの候補（A：アーケード立体 B：高速道路の標識 C：レーシング D：ドット絵） ----------
+// どれも 880x260 で描いて、画面では 440x130 で表示する
+const LFONT=(s,w=900)=>`${w} ${s}px "Hiragino Kaku Gothic StdN","Hiragino Sans","Yu Gothic UI","Yu Gothic","Meiryo UI",Meiryo,sans-serif`;
+function lgCanvas(){const c=document.createElement('canvas');c.width=880;c.height=260;return c;}
+function lgRound(o,x,y,w,h,r){o.beginPath();o.moveTo(x+r,y);o.arcTo(x+w,y,x+w,y+h,r);o.arcTo(x+w,y+h,x,y+h,r);o.arcTo(x,y+h,x,y,r);o.arcTo(x,y,x+w,y,r);o.closePath();}
+// 立体の文字：奥へ伸びる側面→太い縁→表面のグラデーション→ハイライト
+function lgExtrude(o,s,x,y,size,face1,face2,side,depth,out='#16121e',align='left'){
+  o.font=LFONT(size);o.textAlign=align;o.textBaseline='alphabetic';o.lineJoin='round';
+  for(let i=depth;i>=0;i--){o.lineWidth=14;o.strokeStyle=out;o.strokeText(s,x+i,y+i);}
+  for(let i=depth;i>=1;i--){o.fillStyle=side;o.fillText(s,x+i,y+i);}
+  const gr=o.createLinearGradient(0,y-size*0.85,0,y);gr.addColorStop(0,face1);gr.addColorStop(1,face2);
+  o.fillStyle=gr;o.fillText(s,x,y);
+  o.save();o.beginPath();o.rect(0,y-size,880,size*0.42);o.clip();o.fillStyle='rgba(255,255,255,.35)';o.fillText(s,x,y);o.restore();
+  return o.measureText(s).width;
+}
+function lgSparkle(o,x,y,r,col='#fffbe0'){o.fillStyle=col;o.beginPath();o.moveTo(x,y-r);o.quadraticCurveTo(x,y,x+r,y);o.quadraticCurveTo(x,y,x,y+r);o.quadraticCurveTo(x,y,x-r,y);o.quadraticCurveTo(x,y,x,y-r);o.fill();}
+function lgSprite(o,img,x,y,s){o.save();o.imageSmoothingEnabled=false;o.drawImage(img,x,y,img.width*s,img.height*s);o.restore();}
+function lgCar(o,x,yBottom,s){const car=getCar(OTHER_MODELS[0],'#d8312b').fr[0];const w=car.width/CS*s,h=car.height/CS*s;o.save();o.imageSmoothingEnabled=false;o.drawImage(car,x,yBottom-h,w,h);o.restore();return w;}
+
+// A：アーケード立体（放射状の光の上に、分厚い立体文字）
+function logoA(){
+  const c=lgCanvas(),o=c.getContext('2d');
+  lgRound(o,8,8,864,244,26);o.save();o.clip();
+  o.save();o.translate(440,170);for(let i=0;i<28;i++){o.fillStyle=i%2?'#ffb63a':'#ff7f24';o.beginPath();o.moveTo(0,0);o.arc(0,0,700,i*Math.PI/14,(i+1)*Math.PI/14);o.fill();}o.restore();
+  const v=o.createRadialGradient(440,150,60,440,150,520);v.addColorStop(0,'rgba(255,240,180,.55)');v.addColorStop(1,'rgba(120,30,10,.45)');o.fillStyle=v;o.fillRect(0,0,880,260);
+  o.restore();
+  lgRound(o,8,8,864,244,26);o.lineWidth=10;o.strokeStyle='#16121e';o.stroke();lgRound(o,14,14,852,232,22);o.lineWidth=4;o.strokeStyle='#ffe14d';o.stroke();
+  lgExtrude(o,'GOGO',300,112,104,'#ffffff','#3f8ef0','#14327a',10,'#16121e','center');
+  lgExtrude(o,'いもっち！',330,232,112,'#fff59a','#ff9a00','#b0321c',11,'#16121e','center');
+  lgCar(o,640,238,1.6);lgSprite(o,CHAR.jump,690,10,3.1);
+  lgSparkle(o,96,52,16);lgSparkle(o,560,40,12);lgSparkle(o,72,200,10);lgSparkle(o,612,150,9);
+  return c;
+}
+// B：高速道路の標識（国道17号で横浜から太田へ）
+function logoB(){
+  const c=lgCanvas(),o=c.getContext('2d');
+  o.fillStyle='#8b919c';o.fillRect(180,226,14,34);o.fillRect(686,226,14,34);              // 支柱
+  lgRound(o,10,14,860,214,22);o.fillStyle='#0b6b3f';o.fill();o.lineWidth=6;o.strokeStyle='#16121e';o.stroke();
+  lgRound(o,20,24,840,194,16);o.lineWidth=6;o.strokeStyle='#f4f4f4';o.stroke();
+  const sh=o.createLinearGradient(0,14,0,228);sh.addColorStop(0,'rgba(255,255,255,.12)');sh.addColorStop(.5,'rgba(255,255,255,0)');lgRound(o,20,24,840,194,16);o.fillStyle=sh;o.fill();
+  // 国道の青いおにぎり（逆三角）
+  o.fillStyle='#1f4fc4';o.strokeStyle='#ffffff';o.lineWidth=5;o.beginPath();o.moveTo(44,44);o.lineTo(132,44);o.quadraticCurveTo(136,44,134,50);o.lineTo(92,120);o.quadraticCurveTo(88,126,84,120);o.lineTo(42,50);o.quadraticCurveTo(40,44,44,44);o.fill();o.stroke();
+  o.fillStyle='#fff';o.font=LFONT(40);o.textAlign='center';o.textBaseline='middle';o.fillText('17',88,72);
+  o.font=LFONT(30,700);o.textAlign='left';o.fillStyle='#fff';o.fillText('横浜 → 東京 → 埼玉 → 群馬 太田',156,62);
+  o.textBaseline='alphabetic';o.font=LFONT(98);o.fillStyle='rgba(0,0,0,.35)';o.fillText('GOGOいもっち！',58,198);o.fillStyle='#ffffff';o.fillText('GOGOいもっち！',52,192);
+  lgRound(o,700,40,140,52,10);o.fillStyle='#ffd23a';o.fill();o.fillStyle='#16121e';o.font=LFONT(36);o.textAlign='center';o.textBaseline='middle';o.fillText('120km',770,67);
+  lgSprite(o,CHAR.idle,742,96,2.2);                                                        // 標識の上からのぞく
+  return c;
+}
+// C：レーシング（チェッカーの帯・斜めの文字・金のスウッシュ）
+function logoC(){
+  const c=lgCanvas(),o=c.getContext('2d');
+  o.save();o.transform(1,0,-0.18,1,24,0);
+  o.fillStyle='#101a3a';o.fillRect(30,30,830,200);
+  for(let x=30;x<860;x+=18)for(let j=0;j<2;j++){o.fillStyle=((x-30)/18+j)%2?'#ffffff':'#16121e';o.fillRect(x,30+j*9,18,9);o.fillStyle=((x-30)/18+j)%2?'#16121e':'#ffffff';o.fillRect(x,212+j*9,18,9);}
+  o.fillStyle='rgba(80,150,255,.55)';[[60,80,200],[40,130,150],[70,170,120]].forEach(([x,y,w])=>o.fillRect(x,y,w,6));
+  o.restore();
+  o.save();o.transform(1,0,-0.22,1,40,0);o.lineJoin='round';o.textBaseline='alphabetic';
+  o.font=LFONT(108);o.lineWidth=18;o.strokeStyle='#16121e';o.strokeText('GOGO',80,124);o.lineWidth=8;o.strokeStyle='#ffffff';o.strokeText('GOGO',80,124);
+  const r=o.createLinearGradient(0,40,0,124);r.addColorStop(0,'#ff5a4a');r.addColorStop(1,'#c3101c');o.fillStyle=r;o.fillText('GOGO',80,124);
+  o.font=LFONT(100);o.lineWidth=18;o.strokeStyle='#16121e';o.strokeText('いもっち！',150,206);o.lineWidth=10;o.strokeStyle='#1f4fc4';o.strokeText('いもっち！',150,206);
+  const w=o.createLinearGradient(0,120,0,206);w.addColorStop(0,'#ffffff');w.addColorStop(1,'#cfe0ff');o.fillStyle=w;o.fillText('いもっち！',150,206);
+  o.restore();
+  o.strokeStyle='#ffc531';o.lineWidth=9;o.lineCap='round';o.beginPath();o.moveTo(150,236);o.quadraticCurveTo(420,206,700,232);o.stroke();
+  o.strokeStyle='#fff3b0';o.lineWidth=3;o.beginPath();o.moveTo(170,232);o.quadraticCurveTo(420,206,680,229);o.stroke();
+  o.fillStyle='rgba(255,255,255,.8)';[[640,60,60],[650,80,40],[636,100,52]].forEach(([x,y,w])=>o.fillRect(x,y,w,4));
+  lgSprite(o,CHAR.jump,700,20,2.9);
+  return c;
+}
+// D：ドット絵（小さく描いた文字をドットのまま拡大し、縁取りと段々のグラデーション）
+function lgPixelWord(s,size,cols,outline,shadow){
+  const tw=Math.ceil(size*s.length*1.05)+8,th=Math.ceil(size*1.25)+6;
+  const t=document.createElement('canvas');t.width=tw;t.height=th;const g=t.getContext('2d');
+  g.font=LFONT(size);g.textBaseline='alphabetic';g.fillStyle='#000';g.fillText(s,3,size+2);
+  const d=g.getImageData(0,0,tw,th).data,on=(x,y)=>x>=0&&y>=0&&x<tw&&y<th&&d[(y*tw+x)*4+3]>110;
+  let minY=th,maxY=0,maxX=0;for(let y=0;y<th;y++)for(let x=0;x<tw;x++)if(on(x,y)){minY=Math.min(minY,y);maxY=Math.max(maxY,y);maxX=Math.max(maxX,x);}
+  const out=document.createElement('canvas');out.width=maxX+6;out.height=maxY-minY+7;const p=out.getContext('2d');
+  const put=(x,y,col)=>{p.fillStyle=col;p.fillRect(x,y,1,1);};
+  for(let y=minY-2;y<=maxY+3;y++)for(let x=0;x<=maxX+4;x++){
+    const X=x+1,Y=y-minY+2;
+    if(on(x,y)){const k=(y-minY)/(maxY-minY+1);put(X,Y,cols[Math.min(cols.length-1,Math.floor(k*cols.length))]);if(!on(x,y-1))put(X,Y,'#ffffff');}
+    else if(on(x-1,y-1)&&!on(x-1,y)&&!on(x,y-1))put(X,Y,shadow);
+    else if(on(x-1,y)||on(x+1,y)||on(x,y-1)||on(x,y+1))put(X,Y,outline);
+    else if(on(x-1,y-1)||on(x-2,y-2))put(X,Y,shadow);
+  }
+  return out;
+}
+function logoD(){
+  const c=lgCanvas(),o=c.getContext('2d');o.imageSmoothingEnabled=false;
+  // 夜空のパネル（ドットの星・月・道路）
+  const b=document.createElement('canvas');b.width=220;b.height=65;const g=b.getContext('2d');
+  const sky=g.createLinearGradient(0,0,0,65);sky.addColorStop(0,'#1b1846');sky.addColorStop(1,'#5a3a7a');g.fillStyle=sky;g.fillRect(0,0,220,65);
+  const r=seeded(7);for(let i=0;i<40;i++){g.fillStyle=r()<0.3?'#ffe9a0':'#cfd8ff';g.fillRect((r()*220)|0,(r()*44)|0,1,1);}
+  g.fillStyle='#fff3c0';g.beginPath();g.arc(196,14,6,0,7);g.fill();g.fillStyle='#1b1846';g.beginPath();g.arc(199,12,5,0,7);g.fill();
+  g.fillStyle='#2a2440';for(let x=0;x<220;x+=7)g.fillRect(x,46-((x*7)%11),6,20);
+  g.fillStyle='#3a3a46';g.fillRect(0,57,220,8);g.fillStyle='#f0e6b0';for(let x=2;x<220;x+=12)g.fillRect(x,60,6,1);
+  o.drawImage(b,0,0,880,260);
+  o.strokeStyle='#ffe14d';o.lineWidth=8;o.strokeRect(4,4,872,252);o.strokeStyle='#16121e';o.lineWidth=4;o.strokeRect(10,10,860,240);
+  const w1=lgPixelWord('GOGO',22,['#bff0ff','#7fd0ff','#3f9cf0','#2a6fd6'],'#16121e','#3a1a5a');
+  const w2=lgPixelWord('いもっち！',24,['#fff59a','#ffd23a','#ffa31a','#ff7a00'],'#16121e','#5a1a1a');
+  o.drawImage(w1,40,20,w1.width*4,w1.height*4);o.drawImage(w2,40+w1.width*4-20,92,w2.width*4,w2.height*4);
+  lgCar(o,700,228,1.5);lgSprite(o,CHAR.jump,736,40,2.6);
+  return c;
+}
+const LOGO_MAKERS={A:logoA,B:logoB,C:logoC,D:logoD};
+let LOGO_VARIANT=null,LOGO_V=null;
+function drawLogo(){
+  if(LOGO_VARIANT&&LOGO_MAKERS[LOGO_VARIANT]){if(LOGO_V!==LOGO_VARIANT){LOGO=LOGO_MAKERS[LOGO_VARIANT]();LOGO_V=LOGO_VARIANT;}}
+  else if(!LOGO||LOGO_V){LOGO=renderLogo();LOGO_V=null;}
+  const w=440,h=w*LOGO.height/LOGO.width,bob=Math.round(Math.sin(G.time/14)*1.5);
+  ctx.drawImage(LOGO,W/2-w/2,4+bob,w,h);
+}
+function drawTitle(){
+  ctx.fillStyle='rgba(13,16,32,.55)';ctx.fillRect(0,0,W,H);
+  drawLogo();
+  txt('横浜 → 東京 → 埼玉 → 群馬 太田　120km　夕暮れまでにたどり着け！',W/2,138,11,'#fff','center');
+  DEMO_S.t=DEMO_O.t=G.time;
+  ctx.save();ctx.translate(0,-36);drawCar(DEMO_S,false);drawCar(DEMO_O,false);ctx.restore();
+  txt('★スバル車は踏むとダメージ',100,198,10,'#9fc0ff','center');txt('ほかの車は踏んで倒せ！',350,198,10,'#ffd0c0','center');
+  txt('三角コーンに注意　二段ジャンプは水分を使う（ペットボトルで回復）',W/2,214,10,'#ffe14d','center');
+  if((G.time/30|0)%2) txt(coarse()?'タップでスタート':'ENTER / SPACE でスタート',W/2,236,14,'#fff','center');
+  txt(coarse()?'画面タップでジャンプ（長押しで高く・空中でもう一回タップで二段ジャンプ）':'SPACE かクリックでジャンプ（長押しで高く・空中でもう一回で二段）　M 音のON/OFF',W/2,256,9,'#b8c0e0','center');
+}
+
+let last=performance.now(),accum=0;
+function loop(now){
+  accum+=Math.min(100,now-last);last=now;
+  // 1回エラーが出てもゲームが止まらないようにする（無敵時間などの値も正常な範囲に戻す）
+  while(accum>=1000/60){
+    try{if(!G.paused)update();}catch(e){console.error(e);if(G.p){G.p.inv=Math.min(G.p.inv||0,90);}if(!(G.spawnT>0&&G.spawnT<9999))G.spawnT=60;}
+    accum-=1000/60;
+  }
+  try{draw();}catch(e){console.error(e);}
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+window.__imocchi={G,CHAR,MARIO,EDITOR,SUBARU_MODELS,OTHER_MODELS,getCar,STAGES,GOAL,key,step:n=>{for(let i=0;i<n;i++)update();},draw:()=>draw(),start:()=>startIfIdle(),jump:()=>{jumpPressed=true;},setLogo:k=>{LOGO_VARIANT=k;}}; // テスト用（コマ送り）
+})();
+</script>
+</body>
+</html>
