@@ -1282,7 +1282,9 @@ function hurt(p,msg){
   }
   G.hp--;p.inv=90;p.hurtT=24;G.combo=0;G.shake=10;snd('hurt');
   if(msg) addText(p.x+23,p.y-6,msg,'#ff6b6b');
-  if(G.hp<=0){G.mode='over';G.overT=0;bgmStop();snd('over');saveBest();submitRank('score',G.score);}
+  if(G.hp<=0){ // ライフゼロ：後ろへはじき飛ばされて倒れてから、ゲームオーバー表示
+    p.dying=true;p.dyingT=0;p.down=9999;p.inv=120;p.kb=true;p.vx=-3.2;p.vy=Math.min(p.vy,-5);p.on=false;p.hurtT=0;bgmStop();
+  }
 }
 function saveBest(){if(G.score>best){best=G.score;try{localStorage.setItem('imocchi_best',best);}catch(e){}}}
 function surface(c,x0,x1){
@@ -1326,7 +1328,8 @@ function update(){
   if(LP>0){G.rt=(G.rt||0)+1;                      // 帰り道のタイム
     if(G.rt%1800===0&&!(p.down>0))G.say={s:pick(['今日は徹夜ですよぉ','マジヤバイ','いそげいそげ']),t:0};}
   if(p.mecha>0)G.speed*=1.5;                       // ザクいもっち中は1.5倍の速さで走る
-  if(p.down>0){p.down--;G.speed=0;}                // 倒れている間は進まない
+  if(p.down>0){p.down--;G.speed=0;}
+  if(p.dying&&!p.kb&&++p.dyingT>=55){G.mode='over';G.overT=0;snd('over');saveBest();submitRank('score',G.score);return;} // 倒れてから少し間をおいて                // 倒れている間は進まない
   G.dist+=G.speed;
   const ROUTE=LP>0?GOAL-G.dist:G.dist;
   const st=stageAt(ROUTE);
