@@ -657,6 +657,7 @@ addEventListener('keydown',e=>{if(e.target&&e.target.tagName==='INPUT')return;
   if(e.code==='KeyP'||e.code==='Escape'){if(G.mode==='play'){e.preventDefault();setPause(!G.paused);}return;}
   if(G.paused){if(e.code==='Space'||e.code==='Enter'){e.preventDefault();setPause(false);}return;}
   const k=KM[e.code];if(k){e.preventDefault();if(k==='jump'&&!key.jump)jumpPressed=true;key[k]=true;}
+  if(k||e.code==='Enter')tryLandscape();
   if(e.code==='Enter'||e.code==='Space') startIfIdle();});
 addEventListener('keyup',e=>{const k=KM[e.code];if(k)key[k]=false;});
 const sndBtn=document.getElementById('snd');
@@ -666,19 +667,19 @@ addEventListener('keydown',e=>{if(e.target&&e.target.tagName==='INPUT')return;if
 sndLabel();
 // 操作は「画面のどこでもタップ＝ジャンプ」だけ（長押しで高く、空中でもう一回タップで二段ジャンプ）
 sndBtn.addEventListener('pointerdown',e=>e.stopPropagation());
-let fsTried=false;
-function tryLandscape(){ // できる端末では全画面＋横向き固定（だめでも画面を回して表示するので問題なし）
-  if(fsTried||!isTouch())return;fsTried=true;
+function tryLandscape(){ // 全画面＋横向き固定。全画面でなくなっていたら、次に触ったときにまた全画面へ（ブラウザの決まりで、タップかキー操作の時しか全画面にできない）
+  if(document.fullscreenElement||document.webkitFullscreenElement)return;
   try{const el=document.documentElement,req=el.requestFullscreen||el.webkitRequestFullscreen;
     if(req){const pr=req.call(el);if(pr&&pr.then)pr.then(()=>screen.orientation&&screen.orientation.lock&&screen.orientation.lock('landscape').catch(()=>{})).catch(()=>{});}
   }catch(e){}
 }
 addEventListener('pointerdown',e=>{
   if(e.target===sndBtn||(e.target.closest&&e.target.closest('#rankBtn,#rank,#pauseBtn,#notice')))return;
+  tryLandscape();
   if(G.paused){e.preventDefault();setPause(false);return;}
   e.preventDefault();
   if(G.mode==='play'){if(!key.jump)jumpPressed=true;key.jump=true;}
-  else{tryLandscape();startIfIdle();}
+  else startIfIdle();
 },{passive:false});
 const tapUp=()=>{key.jump=false;};
 // 起動時のおことわり：1秒たったら消す
