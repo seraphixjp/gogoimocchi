@@ -1301,7 +1301,7 @@ const fmtTime=f=>{const s=f/60;return `${Math.floor(s/60)}:${String(Math.floor(s
 const G={mode:'title'};
 function reset(){
   Object.assign(G,{time:0,speed:2.1,dist:0,score:0,combo:0,hp:5,cars:[],cones:[],items:[],fx:[],texts:[],spawnT:70,coneT:240,itemT:600,mechaT:rnd(1200,1800),water:WATER_MAX,waterT:rnd(420,600),shake:0,overT:0,
-    stage:0,banner:{s:'STAGE 1　横浜 出発！',t:0},gate:null,jamOn:false,jamDone:false,entryDone:false,
+    stage:0,banner:{s:'STAGE 1　横浜 出発！',t:0},gate:null,jamOn:false,jamDone:false,entryDone:false,kmSaid:{},
     p:{x:80,y:GROUND-FOOT,vx:0,vy:0,on:true,jumps:0,face:0,inv:0,anim:0,hurtT:0}});
 }
 reset();
@@ -1352,6 +1352,17 @@ function spawnJamCar(x){ // 渋滞の車：みんなほぼ同じ速さでのろ�
   const m=subaru?pick(SUBARU_MODELS.filter(x=>x.id!=='sti'&&x.id!=='22b')):pick(OTHER_MODELS.filter(x=>x.id!=='truck'));
   const color=subaru?m.color:pick(OTHER_COLORS);
   const spr=getCar(m,color);G.cars.push({x,m,color,spr,subaru,v:0.15,state:'run',t:0,w:spr.fr[0].width/CS,h:spr.fr[0].height/CS,lane:0,jam:true});
+}
+// 残りの距離のセリフ（km：言うこと）。行きは太田まで、帰り道は編集部まで
+const KM_LINES_GO=[[110,'太田まで110km…遠すぎない！？'],[90,'まだ90kmもあるの…'],[86,'東京は車が多いなぁ…まだ半分もいってない'],[75,'渋滞をぬけたらあと少し…じゃない！'],[60,'半分きた！太田まであと60km！'],[45,'埼玉だ！太田まであと45km！'],[30,'あと30km！スバルの匂いがしてきた！'],[15,'あと15km！取材に間に合う！？'],[8,'太田が見えてきたー！'],[3,'スバルの工場だ！あと3km！'],[1,'あと1km！ラストスパート！']];
+const KM_LINES_RET=[[110,'編集部まで110km…朝までに帰れる！？'],[90,'まだ90km…原稿どうしよう…'],[70,'走りながら原稿考えなきゃ…'],[60,'半分きた！編集部まであと60km！'],[45,'東京だ！編集部まであと45km！'],[30,'あと30km！編集長の顔が浮かぶ…'],[15,'あと15km！締切に間に合えー！'],[8,'横浜の海が見えてきた！'],[3,'編集部のビルだ！あと3km！'],[1,'あと1km！原稿まだ書いてないけど！']];
+function kmLines(){
+  const ret=(G.lap||1)>=2,km=Math.max(0,(GOAL-G.dist)/GOAL*TOTAL_KM),L=ret?KM_LINES_RET:KM_LINES_GO;
+  G.kmSaid=G.kmSaid||{};
+  for(const [k,s] of L)if(km<=k&&!G.kmSaid[k]){
+    if(km<k-3){G.kmSaid[k]=true;continue;}                       // 3km過ぎても言えなかったらあきらめる
+    if(!(G.p.down>0)&&(!G.say||G.say.t>40)){G.kmSaid[k]=true;G.say={s,t:0};}  // 別のセリフの最中は少し待つ
+    break;}
 }
 function hurt(p,msg){
   if(p.inv>0) return;
@@ -1410,6 +1421,7 @@ function update(){
   if(p.down>0){p.down--;G.speed=0;}
   if(p.dying&&!p.kb&&++p.dyingT>=55){G.mode='over';G.overT=0;snd('over');saveBest();submitRank('score',G.score);return;} // 倒れてから少し間をおいて                // 倒れている間は進まない
   G.dist+=G.speed;
+  kmLines();
   const ROUTE=LP>0?GOAL-G.dist:G.dist;
   const st=stageAt(ROUTE);
   if(st!==G.stage){G.stage=st;bgmSet(st);snd('stage');G.banner={s:LP>0?`${STAGES[st].name}${st===0?'（ゴール）':''}`:`STAGE ${st+1}　${STAGES[st].name}${st===3?'（ゴール）':''}`,t:0};}
