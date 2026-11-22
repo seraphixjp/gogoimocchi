@@ -988,7 +988,7 @@ function drawHome(d){
       // 玄関（ドア・ひさし・表札・階段）
       rect(Hx+54,base-15,10,15,'#7a5236');rect(Hx+55,base-14,8,13,'#8c6244');rect(Hx+61,base-8,1,2,'#e8c060');
       rect(Hx+52,base-17,14,1.5,'#6a6e78');rect(Hx+52,base-1,14,1,'#b0aca4');
-      rect(Hx+66,base-13,7,4,'#f4f1e6');ctx.fillStyle='#2a2a30';ctx.font='bold 2.6px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('いもっち',Hx+69.5,base-11);
+      rect(Hx+65.4,base-15.4,4.6,11.4,'#8a7a60');ctx.fillStyle='#f4f1e6';ctx.fillRect(Hx+65.8,base-15,3.8,10.6);ctx.fillStyle='#2a2a30';ctx.font='bold 2.3px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';['い','も','っ','ち'].forEach((c,k)=>ctx.fillText(c,Hx+67.7,base-13.5+k*2.45)); // 縦長の表札（壁の中に収める）
       // 2階・3階（クリーム色の外壁・窓・ベランダ）
       const top=base-18-30;
       rect(Hx,top,w,30,'#f2e8d2');rect(Hx+w-5,top,5,30,'#d8ccb2');rect(Hx,top+14.5,w,1,'#dccfb4');
