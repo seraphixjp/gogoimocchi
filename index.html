@@ -40,6 +40,9 @@
   .rk-cols li span{float:right;color:#ffe14d;font-variant-numeric:tabular-nums}
   .rk-cols li.me{color:#7dff8a}
   #rkStatus{margin:8px 0 0;font-size:11px;color:#cfd3e6}
+  #rkEntry{margin:8px 0 2px;padding:8px;border-radius:8px;background:rgba(125,255,138,.12);color:#7dff8a;font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  #rkEntry[hidden]{display:none}
+  #rkEntry button{margin-left:auto;padding:5px 10px;border-radius:6px;border:0;background:#3a3f5a;color:#fff;font-weight:bold;cursor:pointer}
   @media (max-width:420px){body:not(.rotated) .rk-cols{grid-template-columns:1fr}}
   body.rotated #rank{transform:translate(-50%,-50%) rotate(90deg);width:min(560px,calc(100vh - 32px));max-height:calc(100vw - 32px)}
   /* 縦持ちのスマホでは画面ごと90度回して横画面で表示する */
@@ -54,6 +57,7 @@
 <button id="rankBtn" type="button" aria-label="ランキング" title="ランキング">🏆</button>
 <div id="rank" hidden>
   <div class="rk-head"><b>🏆 みんなのランキング</b><button id="rkClose" type="button" aria-label="閉じる">✕</button></div>
+  <div id="rkEntry" hidden><b>🎉 ランキング入り！</b>　名前を入れて「保存」してね<button id="rkSkip" type="button">登録しない</button></div>
   <div class="rk-name"><label for="rkName">なまえ</label><input id="rkName" maxlength="12" placeholder="ランキングに出す名前"><button id="rkSave" type="button">保存</button></div>
   <div class="rk-cols">
     <div><h3>行き：スコア</h3><ol id="rkScore"></ol></div>
@@ -831,6 +835,22 @@ document.getElementById('rkClose').addEventListener('click',()=>{rankEl.hidden=t
 loadRank();
 
 addEventListener('pointerup',tapUp);addEventListener('pointercancel',tapUp);
+// ---------- 帰り道を走りきった時の名前入力（今回の記録が10位以内に入っていたら） ----------
+const rkEntry=document.getElementById('rkEntry');
+function rankMineNow(){ // 今回の記録（行きのスコア・帰り道のタイム）が、自分の行としてランキング10位以内に載っているか
+  if(!RANK.ok)return false;
+  const mine=r=>r.me||(RANK.uid&&r.id===RANK.uid),val=(r,k)=>r.v!==undefined?r.v:r[k];
+  return (G.score>0&&topList('score').slice(0,10).some(r=>mine(r)&&val(r,'score')===G.score))||
+         (G.rt>0&&topList('time').slice(0,10).some(r=>mine(r)&&val(r,'time')===Math.round(G.rt)));
+}
+function entryCheck(){ // 結果を見せてから（2.5秒後）。登録の返事が遅い時は8秒まで待つ
+  if(G.entryDone||G.overT<150)return;
+  if(rankMineNow()){G.entryDone=true;rkEntry.hidden=false;rankEl.hidden=false;rkName.value=rankName;renderRank();return;}
+  if(G.overT>480)G.entryDone=true;
+}
+document.getElementById('rkSkip').addEventListener('click',e=>{e.stopPropagation();rkEntry.hidden=true;rankEl.hidden=true;});
+document.getElementById('rkSave').addEventListener('click',()=>{rkEntry.hidden=true;});
+rkName.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();document.getElementById('rkSave').click();rkName.blur();}});
 
 function rnd(a,b){return a+Math.random()*(b-a);}
 function pick(a){return a[(Math.random()*a.length)|0];}
@@ -1281,7 +1301,7 @@ const fmtTime=f=>{const s=f/60;return `${Math.floor(s/60)}:${String(Math.floor(s
 const G={mode:'title'};
 function reset(){
   Object.assign(G,{time:0,speed:2.1,dist:0,score:0,combo:0,hp:5,cars:[],cones:[],items:[],fx:[],texts:[],spawnT:70,coneT:240,itemT:600,mechaT:rnd(1200,1800),water:WATER_MAX,waterT:rnd(420,600),shake:0,overT:0,
-    stage:0,banner:{s:'STAGE 1　横浜 出発！',t:0},gate:null,jamOn:false,jamDone:false,
+    stage:0,banner:{s:'STAGE 1　横浜 出発！',t:0},gate:null,jamOn:false,jamDone:false,entryDone:false,
     p:{x:80,y:GROUND-FOOT,vx:0,vy:0,on:true,jumps:0,face:0,inv:0,anim:0,hurtT:0}});
 }
 reset();
@@ -1289,7 +1309,7 @@ function startIfIdle(){
   if(G.mode==='title'){reset();G.lap=1;startIntro();}
   else if(G.mode==='over' && G.overT>50){reset();G.lap=1;startIntro();}
   else if(G.mode==='clear' && G.overT>50){
-    if((G.lap||1)>=2){reset();G.lap=1;G.mode='title';return;}       // 帰り道クリア→タイトルへ
+    if((G.lap||1)>=2){if(!rkEntry.hidden&&!rankEl.hidden)return;reset();G.lap=1;G.mode='title';rankEl.hidden=true;rkEntry.hidden=true;return;}       // 帰り道クリア→タイトルへ（名前の入力中は戻らない）
     const sc=G.score;reset();G.lap=2;G.score=sc;G.stage=3;G.rt=0;     // 帰り道（太田→横浜）タイムアタック
     startIntro(null,true);
   }
@@ -1380,7 +1400,7 @@ function update(){
       else{G.banner={s:'夕暮れまでに太田へたどり着け！',t:0,col:'#ffd27a'};G.bannerQ=['STAGE 1　横浜 出発！'];}}
     return;
   }
-  if(G.mode!=='play'){ if(G.mode!=='title')G.overT++; else G.dist=(G.dist+1.5)%GOAL; return; }
+  if(G.mode!=='play'){ if(G.mode!=='title')G.overT++; else G.dist=(G.dist+1.5)%GOAL; if(G.mode==='clear'&&(G.lap||1)>=2)entryCheck(); return; }
   const p=G.p;
   const LP=(G.lap||1)-1; // 2周目以降は全体を速く
   G.speed=Math.min(LP>0?4.8+LP*0.6:4.4,2.1+LP*0.6+G.time/3600*1.35); // 最高速を少し下げた（行きだけ。埼玉・太田は常に最高速なので易しくなる。帰り道のタイムアタックは元のまま）
@@ -2018,7 +2038,7 @@ function loop(now){
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
-window.__imocchi={G,CHAR,MARIO,EDITOR,SUBARU_MODELS,OTHER_MODELS,getCar,STAGES,GOAL,key,step:n=>{for(let i=0;i<n;i++)update();},draw:()=>draw(),start:()=>startIfIdle(),jump:()=>{jumpPressed=true;},setLogo:k=>{LOGO_VARIANT=k;}}; // テスト用（コマ送り）
+window.__imocchi={rank:()=>RANK,G,CHAR,MARIO,EDITOR,SUBARU_MODELS,OTHER_MODELS,getCar,STAGES,GOAL,key,step:n=>{for(let i=0;i<n;i++)update();},draw:()=>draw(),start:()=>startIfIdle(),jump:()=>{jumpPressed=true;},setLogo:k=>{LOGO_VARIANT=k;}}; // テスト用（コマ送り）
 })();
 </script>
 </body>
