@@ -2042,11 +2042,12 @@ let last=performance.now(),accum=0;
 function loop(now){
   accum+=Math.min(100,now-last);last=now;
   // 1回エラーが出てもゲームが止まらないようにする（無敵時間などの値も正常な範囲に戻す）
+  let n=0;
   while(accum>=1000/60){
     try{if(!G.paused)update();}catch(e){console.error(e);if(G.p){G.p.inv=Math.min(G.p.inv||0,90);}if(!(G.spawnT>0&&G.spawnT<9999))G.spawnT=60;}
-    accum-=1000/60;
+    accum-=1000/60;n++;
   }
-  try{draw();}catch(e){console.error(e);}
+  if(n||G.paused){try{draw();}catch(e){console.error(e);}}   // 120Hzの画面では、進まなかったコマは描かない（同じ絵を2回描かない）
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
